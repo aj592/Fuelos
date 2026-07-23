@@ -1,0 +1,2315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0e1217">
+<link rel="manifest" href="manifest.webmanifest">
+<title>FuelOS — food, macros & weight</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --page:        #0e1217;   /* midnight blue-charcoal */
+    --surface:     #151b23;   /* slate card */
+    --surface-2:   #1c242e;
+    --track:       #27303c;
+    --border:      rgba(151,173,200,0.13);
+    --ink:         #e9ecf1;
+    --ink-2:       #a9b3c1;
+    --muted:       #6e7a8a;
+    --protein:     #4a8fdf;
+    --carbs:       #d99b3d;
+    --fat:         #d06a8c;
+    --accent:      #e3a455;   /* warm amber */
+    --accent-ink:  #191006;
+    --hdone:       #4a8fdf;
+    --good:        #4cae5f;
+    --warning:     #e0a33c;
+    --line:        rgba(151,173,200,0.35);   /* hover/outline lines */
+    --shadow:      0 8px 22px rgba(0,0,0,0.35);
+    --radius: 20px;
+    --radius-sm: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body.booting main { visibility: hidden; }   /* no flash of the wrong page while saved state loads */
+  body {
+    font-family: ui-rounded, "SF Pro Rounded", "Hiragino Maru Gothic ProN", Quicksand, Comfortaa, system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--page); color: var(--ink);
+    background-image: radial-gradient(1100px 560px at 88% -8%, rgba(227,164,85,0.06), transparent 62%),
+                      radial-gradient(900px 500px at -10% 100%, rgba(74,143,223,0.05), transparent 60%);
+    background-attachment: fixed;
+    display: flex; min-height: 100vh; font-size: 14px;
+  }
+
+  /* ---------- Sidebar ---------- */
+  aside {
+    width: 216px; flex-shrink: 0; padding: 20px 12px;
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 2px;
+    position: sticky; top: 0; height: 100vh;
+  }
+  .logo { font-size: 16px; font-weight: 700; padding: 0 10px 18px; letter-spacing: 0.2px; }
+  .logo span { color: var(--muted); }
+  .nav-label { font-size: 9.5px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); padding: 14px 14px 5px; user-select: none; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; border-radius: 999px; cursor: pointer;
+    color: var(--ink-2); border: none; background: none; font-size: 14px;
+    width: 100%; text-align: left; font-family: inherit;
+  }
+  .nav-item svg { width: 17px; height: 17px; flex-shrink: 0; opacity: 0.85; }
+  .nav-item { transition: background .15s, color .15s; }
+  .nav-item:hover { background: var(--surface-2); color: var(--ink); }
+  .nav-item.active { background: var(--accent); color: var(--accent-ink); font-weight: 600; box-shadow: 0 3px 12px rgba(227,164,85,0.22); }
+  .nav-spacer { flex: 1; }
+  .nav-footnote { padding: 10px; font-size: 11.5px; color: var(--muted); }
+
+  /* ---------- Main ---------- */
+  main { flex: 1; padding: 28px 32px 48px; max-width: 1180px; }
+  .page { display: none; }
+  .page.active { display: block; }
+
+  .pagehead { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+  .pagehead h1 { font-size: 21px; font-weight: 700; }
+  .pagehead .date { color: var(--muted); font-size: 13px; }
+  .quick-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn {
+    background: var(--surface); border: 1px solid var(--border); color: var(--ink-2);
+    padding: 8px 16px; border-radius: 999px; cursor: pointer; font-size: 13px; font-family: inherit;
+    white-space: nowrap;
+  }
+  .btn { transition: background .15s, color .15s, border-color .15s; }
+  .btn:hover { color: var(--ink); border-color: var(--line); background: var(--surface-2); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+  .btn.primary:hover { color: var(--accent-ink); filter: brightness(0.92); }
+
+  .grid { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 16px; align-items: start; }
+  .col { display: flex; flex-direction: column; gap: 16px; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px;
+    box-shadow: var(--shadow);
+  }
+  .card h2 { font-size: 13px; font-weight: 600; color: var(--ink-2); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+  .card h2 .meta { font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--muted); font-size: 12px; }
+
+  /* ---------- Momentum strip ---------- */
+  .strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 16px; }
+  .tile { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; box-shadow: var(--shadow); }
+  .tile .label { font-size: 11.5px; color: var(--muted); margin-bottom: 6px; }
+  .tile .value { font-size: 22px; font-weight: 700; }
+  .tile .sub { font-size: 12px; color: var(--ink-2); margin-top: 3px; }
+  .up { color: var(--good); }
+
+  /* ---------- Checklists (tasks + shopping) ---------- */
+  .check-item { display: flex; align-items: center; gap: 10px; padding: 8px 2px; border-bottom: 1px solid rgba(151,173,200,0.09); }
+  .check-item input[type=checkbox], .day input[type=checkbox] { border-radius: 50%; }
+  .check-item:last-of-type { border-bottom: none; }
+  .check-item input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+  .check-item label { flex: 1; cursor: pointer; color: var(--ink); }
+  .check-item.done label { color: var(--muted); text-decoration: line-through; }
+  .chip { font-size: 11px; color: var(--ink-2); background: var(--surface-2); border: 1px solid var(--border); padding: 2px 7px; border-radius: 20px; white-space: nowrap; }
+  .chip.due { color: var(--warning); }
+  .addrow { display: flex; gap: 8px; margin-top: 12px; }
+  .addrow input {
+    flex: 1; min-width: 0; background: var(--page); border: 1px solid var(--border); color: var(--ink);
+    padding: 8px 14px; border-radius: 999px; font-family: inherit; font-size: 13px;
+  }
+  .addrow input::placeholder { color: var(--muted); }
+
+  /* ---------- Macros ---------- */
+  .kcal-line { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+  .kcal-line .big { font-size: 30px; font-weight: 700; }
+  .kcal-line .of { color: var(--muted); font-size: 14px; }
+  .kcal-sub { color: var(--ink-2); font-size: 12.5px; margin-bottom: 16px; }
+  .macro { margin-bottom: 12px; }
+  .macro .row { display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 5px; }
+  .macro .row .name { display: flex; align-items: center; gap: 7px; color: var(--ink); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .macro .row .nums { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .meter { height: 9px; background: var(--track); border-radius: 999px; overflow: hidden; }
+  .meter > div { height: 100%; border-radius: 999px; }
+
+  /* ---------- Workout card ---------- */
+  .wo-title { font-size: 16px; font-weight: 700; margin-bottom: 2px; }
+  .wo-sub { color: var(--ink-2); font-size: 12.5px; margin-bottom: 12px; }
+  .wo-list { color: var(--ink-2); font-size: 13px; line-height: 1.8; margin-bottom: 14px; }
+  .wo-list b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- Goals ---------- */
+  .goal { margin-bottom: 14px; }
+  .goal .row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; }
+  .goal .row .pct { color: var(--ink-2); }
+  .goal .meter > div { background: var(--accent); }
+
+  /* ---------- Week planner ---------- */
+  .planner { display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap: 8px; font-size: 11.5px; }
+  .day { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; display: flex; flex-direction: column; }
+  .day.empty { background: transparent; border: 1.5px dashed rgba(151,173,200,0.20); }
+  .day .dhead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 12.5px; font-weight: 700; min-height: 17px; }
+  .day input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; display: none; }
+  .planner.selecting .day input[type=checkbox] { display: inline-block; }
+  .planner.selecting .day { cursor: pointer; }
+  .planner.selecting .day.picked { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .slotname { color: var(--muted); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 7px; }
+  .slotfood { color: var(--ink); line-height: 1.3; }
+  .slotmac { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 10.5px; }
+  .addslot { color: var(--muted); font-style: italic; margin-top: 8px; cursor: pointer; }
+  .addslot:hover { color: var(--ink-2); }
+  .dfoot { border-top: 1px solid var(--border); margin-top: auto; padding-top: 6px; color: var(--ink-2); font-variant-numeric: tabular-nums; font-weight: 600; }
+  .day.empty .dfoot { border-top: none; color: var(--muted); font-weight: 400; }
+
+  /* ---------- Meal rows (not a checklist) ---------- */
+  .meal-row { display: flex; align-items: center; gap: 12px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 8px; background: var(--surface-2); }
+  .meal-row .minfo { flex: 1; min-width: 0; }
+  .meal-row .mslot { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; display: block; }
+  .meal-row .mname { color: var(--ink-2); font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .meal-row .mkcal { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .meal-row.eaten { border-color: var(--line); background: var(--surface); }
+  .meal-row.eaten .mname { color: var(--ink); font-weight: 600; }
+  .eatbtn { font-size: 11.5px; padding: 5px 13px; white-space: nowrap; }
+  .meal-row.eaten .eatbtn { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+  .editbtn { font-size: 11.5px; padding: 5px 11px; white-space: nowrap; color: var(--muted); }
+  .portpill { font-size: 12px; padding: 5px 12px; }
+  .portpill.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+  #meal-editor select {
+    background: var(--surface); border: 1px solid var(--border); color: var(--ink);
+    padding: 7px 12px; border-radius: 999px; font-family: inherit; font-size: 12.5px; max-width: 260px;
+  }
+
+  /* ---------- Habits ---------- */
+  .dotgrid { display: grid; grid-template-columns: repeat(7, 13px); gap: 4px; margin: 10px 0 12px; }
+  .dotgrid i { width: 9px; height: 9px; border-radius: 50%; background: var(--track); display: block; }
+  .dotgrid i.on { background: var(--accent); }
+  .hgrid { display: grid; grid-template-columns: 148px repeat(31, minmax(0,1fr)) 52px 40px; gap: 3px; align-items: center; }
+  .hgrid .hlabel { font-size: 12px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 8px; }
+  .hgrid .hlabel, .wgrid .hlabel { cursor: grab; }
+  .hgrid .hlabel:hover, .wgrid .hlabel:hover { color: var(--ink); }
+  .hlabel.drop-hint { box-shadow: inset 0 2px 0 var(--accent); color: var(--ink); }
+  .hlabel.dragging { opacity: 0.4; }
+  .hday { font-size: 8.5px; color: var(--muted); text-align: center; }
+  .hday.wkend { color: var(--ink-2); font-weight: 600; }
+  .hcell { aspect-ratio: 1; border-radius: 5px; background: #37424f; }  /* missed — brightened for contrast */
+  .hcell.done { background: var(--hdone); }
+  .hcell.off { background: var(--surface-2); opacity: 0.35; }
+  .hcell.future { background: transparent; border: 1px solid var(--border); }
+  .hgrid, .wgrid { position: relative; }
+  .hday { line-height: 1.2; }
+  .hday b { display: block; font-size: 7.5px; font-weight: 600; color: var(--muted); }
+  .hcell.today:not(.off) { cursor: pointer; }
+  .hcell.today:not(.off):hover { box-shadow: 0 0 0 1.5px rgba(151,173,200,0.5); }
+  .hday.today-h, .wgrid .hday.curw-h { position: relative; }
+  .hday.today-h::before, .wgrid .hday.curw-h::before {
+    content: '▾'; position: absolute; top: -13px; left: 50%; transform: translateX(-50%);
+    font-size: 10px; color: var(--ink); line-height: 1;
+  }
+  .hfreq { color: var(--muted); font-size: 9px; letter-spacing: 0.5px; margin-left: 6px; font-weight: 600; }
+  .hstat { font-size: 11px; color: var(--ink-2); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .legend-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); margin-right: 14px; }
+  .legend-chip i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .wgrid { display: grid; grid-template-columns: 148px repeat(5, minmax(0,1fr)) 52px 40px; gap: 3px; align-items: center; }
+  .wgrid .hday { font-size: 9px; }
+  .wcell { width: 100%; height: 26px; border-radius: 8px; background: var(--track); display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--accent-ink); font-weight: 700; }
+  .wcell.done { background: var(--hdone); }
+  .wcell.future { background: transparent; border: 1px solid var(--border); }
+  .hb-select {
+    background: var(--surface); border: 1px solid var(--border); color: var(--ink);
+    padding: 7px 12px; border-radius: 999px; font-family: inherit; font-size: 12.5px;
+  }
+  .hb-input {
+    background: var(--page); border: 1px solid var(--border); color: var(--ink);
+    padding: 7px 14px; border-radius: 999px; font-family: inherit; font-size: 13px; min-width: 0;
+  }
+  .plusbtn { font-size: 14px; padding: 0 9px; line-height: 1.5; border-radius: 999px; }
+  .daybub {
+    width: 27px; height: 27px; border-radius: 50%; background: var(--track); color: var(--ink-2);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 9.5px; font-weight: 600; cursor: pointer; user-select: none;
+  }
+  .daybub:hover { outline: 1px solid var(--line); }
+  .daybub.on { background: var(--hdone); color: #ffffff; }
+  .fogspan {
+    align-self: stretch; background: var(--surface-2); opacity: 0.45; border-radius: 5px;
+    display: flex; align-items: center; justify-content: flex-end;
+    font-size: 9px; color: var(--ink-2); padding-right: 8px; white-space: nowrap; overflow: hidden;
+  }
+  .outspan {
+    background: #0a0e12; opacity: 1; color: var(--muted); border: 1px dashed rgba(151,173,200,0.12);
+    justify-content: flex-start; padding-left: 8px; font-style: italic;
+  }
+  .hb-layout { display: grid; grid-template-columns: 1fr 248px; gap: 16px; align-items: start; }
+  @media (max-width: 1000px) { .hb-layout { grid-template-columns: 1fr; } }
+  .hb-cal {
+    position: fixed; z-index: 60; width: 264px; display: none;
+    background: var(--surface); border: 1px solid rgba(151,173,200,0.20); border-radius: 16px;
+    padding: 14px; box-shadow: 0 16px 40px rgba(0,0,0,0.55);
+  }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .cal-day {
+    aspect-ratio: 1; border-radius: 7px; background: var(--track); color: var(--ink-2);
+    display: flex; align-items: center; justify-content: center; font-size: 10.5px; cursor: pointer;
+  }
+  .cal-day:hover { outline: 1px solid var(--line); }
+  .cal-day.done { background: var(--hdone); color: #ffffff; font-weight: 700; }
+  .cal-day.off, .cal-day.future, .cal-day.pre { opacity: 0.25; cursor: default; background: var(--surface-2); }
+  .cal-day.off:hover, .cal-day.future:hover, .cal-day.pre:hover { outline: none; }
+  .menu-item { padding: 8px 12px; border-radius: 9px; cursor: pointer; font-size: 12.5px; color: var(--ink-2); margin-top: 4px; }
+  .menu-item:hover { background: var(--surface-2); color: var(--ink); }
+  .tsec { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; margin: 14px 0 4px; }
+  .tsec.warn { color: var(--warning); }
+
+  #food-macro-form input {
+    width: 92px; background: var(--surface); border: 1px solid var(--border); color: var(--ink);
+    padding: 7px 12px; border-radius: 999px; font-family: inherit; font-size: 13px;
+  }
+  #food-macro-form input::placeholder { color: var(--muted); }
+
+  /* ---------- Weight chart ---------- */
+  .rangebtn { font-size: 12px; padding: 5px 14px; }
+  .subtab { font-size: 12.5px; padding: 6px 16px; }
+  .lane { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 10px; min-height: 110px; }
+  .lane-hint { outline: 2px dashed rgba(227,164,85,0.6); outline-offset: 3px; }
+  .subtab.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+  .rangebtn.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+
+  /* ---------- Wireframe pages ---------- */
+  .wf-note { color: var(--ink-2); font-size: 13.5px; line-height: 1.6; margin-bottom: 20px; max-width: 640px; }
+  .wf { border: 1.5px dashed rgba(151,173,200,0.20); border-radius: var(--radius-sm); padding: 14px 16px; margin-bottom: 12px; color: var(--muted); font-size: 12.5px; }
+  .wf b { color: var(--ink-2); font-weight: 600; display: block; margin-bottom: 4px; font-size: 13px; }
+  .wf-split { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .wf-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+  /* ---------- Mobile: bottom tab bar + stacked layout ---------- */
+  #tabbar {
+    display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+    background: var(--surface); border-top: 1px solid var(--border);
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    box-shadow: 0 -6px 18px rgba(0,0,0,0.35);
+  }
+  #tabbar .nav-item {
+    flex: 1; flex-direction: column; gap: 3px; padding: 7px 2px 6px;
+    font-size: 10px; border-radius: 12px; text-align: center; justify-content: center;
+  }
+  #tabbar .nav-item svg { width: 19px; height: 19px; }
+  #tabbar .nav-item.active { box-shadow: none; }
+  @media (max-width: 900px) {
+    .grid, .wf-split, .wf-3 { grid-template-columns: 1fr !important; }
+    .planner { grid-template-columns: repeat(2, 1fr); }
+    .strip { grid-template-columns: repeat(2, 1fr); }
+    .lanes { grid-template-columns: 1fr !important; }
+    aside { display: none; }
+    #tabbar { display: flex; }
+    main { padding: 18px 14px calc(84px + env(safe-area-inset-bottom)); max-width: none; }
+    .pagehead h1 { font-size: 19px; }
+    .meal-row { flex-wrap: wrap; }
+    .meal-row .minfo { flex-basis: 100%; }
+    .card { padding: 16px; }
+    .btn { padding: 9px 16px; }   /* bigger touch targets */
+    #meal-editor select, .hb-select { max-width: 100%; }
+    #diet-body input[type=number], #food-macro-form input { min-width: 74px; flex: 1; }
+  }
+  @media (max-width: 480px) {
+    .planner { grid-template-columns: 1fr; }
+    .strip { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .tile { padding: 13px 15px; }
+    .tile .value { font-size: 19px; }
+  }
+</style>
+</head>
+<body class="booting">
+
+<aside>
+  <div class="logo">Fuel<span>OS</span> <span style="color:var(--muted);font-weight:400;font-size:11px">midnight</span></div>
+  <button class="nav-item active" data-page="dashboard">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+    Dashboard</button>
+  <div class="nav-label">Food</div>
+  <button class="nav-item" data-page="diet">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/></svg>
+    Diet</button>
+  <button class="nav-item" data-page="library">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+    Library</button>
+  <button class="nav-item" data-page="shopping">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"/></svg>
+    Shopping</button>
+  <div class="nav-label">Body</div>
+  <button class="nav-item" data-page="weight">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/><path d="M21 7v5h-5"/></svg>
+    Weight</button>
+  <div class="nav-spacer"></div>
+  <!-- ===== TEMP: dev data controls (demo load/wipe, wipe-all) =====
+       Delete from here to the /TEMP marker to remove the feature entirely.
+       Nothing else depends on these elements — the controller script below
+       no-ops when they're absent. -->
+  <div style="padding:0 6px 10px;display:flex;flex-direction:column;gap:6px">
+    <button class="btn" id="settings-demo" style="font-size:11.5px;padding:6px 12px">Load demo data</button>
+    <button class="btn" id="settings-demo-wipe" style="display:none;font-size:11.5px;padding:6px 12px">Wipe demo data</button>
+    <button class="btn" id="wipe-all" style="font-size:11.5px;padding:6px 12px;color:var(--warning)">Wipe all data…</button>
+    <span id="settings-demo-ok" style="display:none;font-size:11px;color:var(--good);padding-left:4px">✓</span>
+  </div>
+  <!-- ===== /TEMP ===== -->
+  <button class="nav-item" data-page="settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33h0a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51h0a1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v0a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+    Settings</button>
+  <div class="nav-footnote" id="storage-note">Local-first · your data, one file</div>
+</aside>
+
+<main>
+
+  <!-- ============ DASHBOARD ============ -->
+  <section class="page active" id="page-dashboard">
+    <div class="pagehead">
+      <div>
+        <h1 id="dash-greet">Good morning, AJ</h1>
+        <div class="date" id="dash-date">—</div>
+      </div>
+      <div class="quick-row">
+        <button class="btn" id="qa-meal" title="Log a meal — opens Today's Food">+ Meal</button>
+        <button class="btn primary" id="qa-weigh" title="Log today's weight — opens the Weight tab">+ Weigh-in</button>
+      </div>
+    </div>
+
+    <div class="strip">
+      <div class="tile"><div class="label">7-day avg intake</div><div class="value" id="strip-intake">—</div><div class="sub" id="strip-intake-sub">no days logged yet</div></div>
+    </div>
+
+    <div class="col">
+      <div class="card" id="macro-card">
+        <h2>Today's macros <span class="meta">computed from what you log</span></h2>
+        <div class="kcal-line"><span class="big" id="kcal-big">0</span><span class="of" id="kcal-target">/ 2,400 kcal</span></div>
+        <div class="kcal-sub" id="kcal-sub"></div>
+        <div class="macro">
+          <div class="row"><span class="name"><span class="dot" style="background:var(--protein)"></span>Protein</span><span class="nums" id="m-pro-num"></span></div>
+          <div class="meter"><div id="m-pro-bar" style="width:0%;background:var(--protein)"></div></div>
+        </div>
+        <div class="macro">
+          <div class="row"><span class="name"><span class="dot" style="background:var(--carbs)"></span>Carbs</span><span class="nums" id="m-carb-num"></span></div>
+          <div class="meter"><div id="m-carb-bar" style="width:0%;background:var(--carbs)"></div></div>
+        </div>
+        <div class="macro">
+          <div class="row"><span class="name"><span class="dot" style="background:var(--fat)"></span>Fat</span><span class="nums" id="m-fat-num"></span></div>
+          <div class="meter"><div id="m-fat-bar" style="width:0%;background:var(--fat)"></div></div>
+        </div>
+      </div>
+
+      <div class="card" id="food-card">
+        <h2 id="food-head" style="cursor:pointer;user-select:none"><span><span id="food-chev" style="display:inline-block;width:14px;color:var(--muted)">▸</span> Today's food</span> <span class="meta" id="food-date"></span></h2>
+        <div id="food-collapse" style="display:none">
+          <div id="food-list"></div>
+          <div class="addrow"><input id="food-input" placeholder="Log something you ate…"><button class="btn" id="food-add">Add</button></div>
+          <div id="food-macro-form" style="display:none;margin-top:10px;background:var(--page);border:1px solid var(--border);border-radius:14px;padding:12px 14px">
+            <div style="font-size:12px;color:var(--ink-2);margin-bottom:8px">Macros for “<span id="fmf-name" style="font-weight:700"></span>” — <b style="color:var(--ink)">calories required</b>, the rest optional</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <input id="fmf-k" type="number" min="1" placeholder="kcal *">
+              <input id="fmf-p" type="number" min="0" placeholder="protein g">
+              <input id="fmf-c" type="number" min="0" placeholder="carbs g">
+              <input id="fmf-f" type="number" min="0" placeholder="fat g">
+              <button class="btn primary" id="fmf-log" style="font-size:12px;padding:6px 14px">Log it</button>
+              <button class="btn" id="fmf-cancel" style="font-size:12px;padding:6px 14px">Cancel</button>
+            </div>
+            <div id="fmf-err" style="display:none;color:var(--warning);font-size:11.5px;margin-top:6px">Calories are required to log this.</div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="card" id="shop-card">
+        <h2 id="shop-head" style="cursor:pointer;user-select:none"><span><span id="shop-chev" style="display:inline-block;width:14px;color:var(--muted)">▸</span> Shopping list</span> <span class="meta" id="shop-meta"></span></h2>
+        <div id="shop-collapse" style="display:none">
+          <div id="shop-dash-list"></div>
+          <div class="addrow"><input placeholder="Add an item…" id="shop-input"><button class="btn" id="shop-add">Add</button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ============ DIET ============ -->
+  <section class="page" id="page-diet">
+    <div class="pagehead">
+      <div><h1>Diet</h1><div class="date">live · the week planner — log on the Dashboard, set targets on the Weight tab</div></div>
+    </div>
+    <div id="diet-body"></div>
+  </section>
+
+  <!-- ============ LIBRARY ============ -->
+  <section class="page" id="page-library">
+    <div class="pagehead">
+      <div><h1>Library</h1><div class="date">dishes & recipes · cook list — create here, plan and log everywhere</div></div>
+    </div>
+    <div id="library-body"></div>
+  </section>
+
+  <!-- ============ SHOPPING ============ -->
+  <section class="page" id="page-shopping">
+    <div class="pagehead"><h1>Shopping</h1><div class="date">live · synced with the dashboard card · drag from the right to load ingredients</div></div>
+    <div class="grid" style="grid-template-columns:1.05fr 0.95fr;align-items:start">
+      <div class="col">
+        <div class="card" id="shop-drop-card">
+          <h2>Shopping list <span class="meta" id="shop-meta-page"></span></h2>
+          <div id="shop-page-list"></div>
+          <div class="addrow"><input id="shop-page-input" placeholder="Add an item…"><button class="btn" id="shop-page-add">Add</button></div>
+        </div>
+        <div class="wf"><b>Behavior</b> Checked items stay in place and auto-clear after 3 days · duplicate ingredients merge · dragging a cook-list dish here also marks it Active. Staples & category grouping come later.</div>
+      </div>
+      <div class="col" id="shop-rail"></div>
+    </div>
+  </section>
+
+
+  <!-- ============ WEIGHT ============ -->
+  <section class="page" id="page-weight">
+    <div class="pagehead">
+      <div><h1>Weight</h1><div class="date">live — weigh-ins, trend, range averages & day detail</div></div>
+      <button class="btn primary" id="set-cal">Set calories</button>
+    </div>
+    <div class="card" style="margin-top:4px">
+      <h2>Weight <span class="meta">live — your real weigh-ins</span></h2>
+      <div class="strip" id="wt-tiles" style="margin-bottom:14px"></div>
+      <div style="display:flex;gap:6px;margin-bottom:12px;align-items:center" id="wt-ranges">
+        <button class="btn rangebtn" data-days="30">1M</button>
+        <button class="btn rangebtn active" data-days="90">3M</button>
+        <button class="btn rangebtn" data-days="180">6M</button>
+        <button class="btn rangebtn" data-days="365">1Y</button>
+        <span style="margin-left:auto;font-size:11.5px;color:var(--muted)">hover = crosshair · drag = range averages · click a day = day detail</span>
+      </div>
+      <svg id="wt-chart" viewBox="0 0 560 224" style="width:100%;height:auto;display:block;cursor:crosshair;touch-action:none;user-select:none" role="img" aria-label="Bodyweight chart with selectable date range. Drag to see average calories for a range; click a day for that day's meals, workout and cardio.">
+        <defs>
+          <linearGradient id="wt-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#4a8fdf" stop-opacity="0.28"/>
+            <stop offset="1" stop-color="#4a8fdf" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <g id="wt-grid"></g>
+        <path id="wt-area" fill="url(#wt-fill)"/>
+        <path id="wt-line" fill="none" stroke="#4a8fdf" stroke-width="1.8" stroke-linejoin="round"/>
+        <g id="wt-goal"></g>
+        <g id="wt-axis"></g>
+        <g id="wt-cross" visibility="hidden" pointer-events="none">
+          <line id="wt-cross-line" y1="14" y2="184" stroke="rgba(151,173,200,0.35)" stroke-width="1" stroke-dasharray="3 3"/>
+          <circle id="wt-cross-dot" r="3.5" fill="#4a8fdf" stroke="#151b23" stroke-width="1.5"/>
+          <text id="wt-cross-label" y="11" fill="#e9ecf1" font-size="10.5" font-weight="600" font-family="system-ui"></text>
+        </g>
+        <rect id="brush" x="0" y="14" width="0" height="170" fill="rgba(227,164,85,0.13)" stroke="rgba(227,164,85,0.5)" stroke-width="1" rx="4" visibility="hidden" pointer-events="none"/>
+      </svg>
+      <div id="wt-readout" style="display:none;margin-top:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:12px 16px;font-size:13px">
+        <span id="wt-readout-range" style="font-weight:700"></span>
+        <span style="color:var(--muted)"> · </span><span id="wt-readout-kcal" style="color:var(--ink-2)"></span>
+        <span style="color:var(--muted)"> · </span><span id="wt-readout-protein" style="color:var(--ink-2)"></span>
+        <span style="color:var(--muted)"> · </span><span id="wt-readout-weight" style="color:var(--ink-2)"></span>
+      </div>
+      <div id="wt-daypanel" style="display:none;margin-top:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:14px 16px;font-size:12.5px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <b id="wt-day-title" style="font-size:13.5px"></b>
+          <button class="btn" id="wt-day-close" style="font-size:11px;padding:4px 12px">Close</button>
+        </div>
+        <div id="wt-day-body" style="display:grid;grid-template-columns:1.2fr 1fr;gap:16px"></div>
+      </div>
+      <div style="display:flex;justify-content:flex-start;align-items:center;margin-top:12px;flex-wrap:wrap;gap:10px">
+        <div class="addrow" style="margin:0;max-width:260px"><input id="wt-input" type="number" step="0.1" min="1" placeholder="Log today's weight…"><button class="btn" id="wt-log">Log</button></div>
+        <div class="addrow" style="margin:0;max-width:250px"><input id="wt-goal-in" type="number" step="0.1" min="1" placeholder="Goal weight…"><button class="btn" id="wt-goal-set">Set goal</button></div>
+        <span style="font-size:12px;color:var(--muted)">drag = avg calories for a stretch · click a day = day detail</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SETTINGS ============ -->
+  <section class="page" id="page-settings">
+    <div class="pagehead"><h1>Settings</h1></div>
+    <!-- ===== TEMP: dev data controls (settings-page copy) — delete with the sidebar TEMP block ===== -->
+    <div class="card" style="max-width:440px;margin-bottom:16px">
+      <h2>Data controls <span class="meta">temporary · while we build</span></h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="btn" id="sp-demo">Load demo data</button>
+        <button class="btn" id="sp-demo-wipe" style="display:none">Wipe demo data</button>
+        <button class="btn" id="sp-wipe-all" style="color:var(--warning)">Wipe all data…</button>
+        <span id="sp-demo-ok" style="display:none;font-size:11.5px;color:var(--good)"></span>
+      </div>
+    </div>
+    <!-- ===== /TEMP ===== -->
+    <div class="card" style="max-width:440px;margin-bottom:16px">
+      <h2>Backup <span class="meta">your data, one file</span></h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="btn" id="bk-export">Download backup</button>
+        <button class="btn" id="bk-import">Import backup…</button>
+        <input type="file" id="bk-file" accept="application/json" style="display:none">
+        <span id="bk-ok" style="display:none;font-size:11.5px;color:var(--good)"></span>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:10px">Includes everything — food log, weigh-ins, plans, dishes, shopping. Import replaces current data.</div>
+    </div>
+    <div class="wf-3">
+      <div class="wf"><b>Data</b> database file location · backup now · export CSV/JSON.</div>
+      <div class="wf"><b>Preferences</b> units (lb/kg) · week start · day-type schedule.</div>
+      <div class="wf"><b>Modules</b> enable/disable modules; future add-ons appear here.</div>
+    </div>
+  </section>
+
+</main>
+
+<nav id="tabbar" aria-label="Primary">
+  <button class="nav-item" data-page="dashboard">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+    Home</button>
+  <button class="nav-item" data-page="diet">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/></svg>
+    Diet</button>
+  <button class="nav-item" data-page="library">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+    Library</button>
+  <button class="nav-item" data-page="shopping">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"/></svg>
+    Shop</button>
+  <button class="nav-item" data-page="weight">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/><path d="M21 7v5h-5"/></svg>
+    Weight</button>
+  <button class="nav-item" data-page="settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33h0a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51h0a1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v0a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+    More</button>
+</nav>
+
+<script>
+  // ---------- persistence: local server -> browser storage -> memory ----------
+  const Store = {
+    mode: 'memory', cache: null,
+    async init() {
+      try {                                                // 1) local server (node server.js)
+        const r = await fetch('/api/state');
+        if (r.ok) { this.cache = await r.json(); this.mode = 'server'; return; }
+      } catch (e) {}
+      try {                                                // 2) browser localStorage (file opened directly)
+        const raw = localStorage.getItem('fuelos-state-v1');
+        this.cache = raw ? JSON.parse(raw) : null;
+        localStorage.setItem('fuelos-probe', '1'); localStorage.removeItem('fuelos-probe');
+        this.mode = 'local';
+      } catch (e) { this.mode = 'memory'; }                // 3) preview sandbox: session-only
+    },
+    get(key) { return this.cache ? this.cache[key] : null; },
+    set(key, val) {
+      this.cache = this.cache || {};
+      this.cache[key] = val;
+      if (this.mode === 'server') {
+        fetch('/api/state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(this.cache) }).catch(() => {});
+      } else if (this.mode === 'local') {
+        try { localStorage.setItem('fuelos-state-v1', JSON.stringify(this.cache)); } catch (e) {}
+      }
+    }
+  };
+  Store.ready = Store.init().then(() => {
+    const note = document.getElementById('storage-note');
+    if (note) note.textContent = Store.mode === 'server' ? 'Saving to fuelos-data.json ✓'
+      : Store.mode === 'local' ? 'Saving to browser storage ✓'
+      : 'Preview mode — not saved (run server.js or open the file in a browser)';
+  });
+
+  // Tab switching (last open page persists across refresh)
+  function showPage(name) {
+    const btn = document.querySelector(`.nav-item[data-page="${name}"]`);
+    const page = document.getElementById('page-' + name);
+    if (!btn || !page) return;
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll(`.nav-item[data-page="${name}"]`).forEach(b => b.classList.add('active'));
+    page.classList.add('active');
+  }
+  document.querySelectorAll('.nav-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      showPage(btn.dataset.page);
+      Store.ready.then(() => Store.set('ui', { ...(Store.get('ui') || {}), page: btn.dataset.page }));
+    });
+  });
+  Store.ready.then(() => {
+    const ui = Store.get('ui');
+    if (ui && ui.page) showPage(ui.page);
+  }).finally(() => document.body.classList.remove('booting'));
+  // Checkbox strike-through
+  document.querySelectorAll('.check-item input').forEach(cb => {
+    cb.addEventListener('change', () => cb.closest('.check-item').classList.toggle('done', cb.checked));
+  });
+  // Quick-add (in-memory demo only)
+  let uid = 100;
+  document.querySelectorAll('[data-add]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const card = document.getElementById(btn.dataset.add);
+      const input = card.querySelector('.addrow input');
+      if (!input.value.trim()) return;
+      const id = 'n' + (uid++);
+      const div = document.createElement('div');
+      div.className = 'check-item';
+      div.innerHTML = `<input type="checkbox" id="${id}"><label for="${id}"></label>`;
+      div.querySelector('label').textContent = input.value.trim();
+      div.querySelector('input').addEventListener('change', e => div.classList.toggle('done', e.target.checked));
+      card.insertBefore(div, card.querySelector('.addrow'));
+      input.value = '';
+    });
+  });
+  // Demo-only toggles (checklist templates card etc.)
+  document.querySelectorAll('.habit-toggle-card').forEach(c => c.addEventListener('click', e => {
+    const b = e.target.closest('.eatbtn');
+    if (!b) return;
+    const row = b.closest('.meal-row');
+    row.classList.toggle('eaten');
+    const on = row.classList.contains('eaten');
+    b.textContent = on ? '✓ Done' : (b.textContent.includes('Use') ? 'Use' : 'Done');
+  }));
+  // Habit dot grids
+  document.querySelectorAll('.dotgrid').forEach(g => {
+    g.innerHTML = [...(g.dataset.pat || '')].map(ch => `<i${ch === '1' ? ' class="on"' : ''}></i>`).join('');
+  });
+
+  // ================= FOOD LOG — live, per-day, persistent (store: foodLive) =================
+  (function () {
+    const card = document.getElementById('food-card');
+    if (!card) return;
+    const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    let state = { log: {}, targets: { k: 2400, p: 180, c: 250, f: 70 } };
+    let openEditor = null;                                 // planKey of the row with the portion/swap editor open
+    const todayIso = () => iso(new Date());
+    function dayArr(dayIso) { if (!state.log[dayIso]) state.log[dayIso] = []; return state.log[dayIso]; }
+    function setM(id, val, target) {
+      document.getElementById('m-' + id + '-num').textContent = `${Math.round(val)} / ${target} g`;
+      document.getElementById('m-' + id + '-bar').style.width = Math.min(100, val / target * 100) + '%';
+    }
+    const PLABEL = { 0.25: '¼', 0.5: '½', 0.75: '¾', 1: '1', 1.5: '1½', 2: '2×' };
+    function plannedEditor(pe, logged) {
+      const dishes = (window.LifeOS && window.LifeOS.getDishes) ? window.LifeOS.getDishes() : [];
+      const cur = logged ? (logged.portion || 1) : 1;
+      return `<div style="background:var(--page);border:1px solid var(--border);border-radius:14px;padding:12px 14px;margin-bottom:8px">
+        <div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:7px">How much did you eat?</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">` +
+        [0.25, 0.5, 0.75, 1, 1.5, 2].map(m =>
+          `<button class="btn portpill${logged && cur === m ? ' active' : ''}" data-pp="${m}" data-key="${pe.key}">${PLABEL[m]}</button>`).join('') +
+        `</div>
+        <div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:7px">Or swap it for another dish</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <select class="hb-select" data-pswap="${pe.key}">
+            <option value="">Choose a dish…</option>` +
+            dishes.map(d => `<option value="${d.id}"${d.id === pe.dishId ? ' selected' : ''}>${esc(d.name)} — ${Math.round(d.k)} kcal</option>`).join('') +
+          `</select>
+          <button class="btn" data-pdone="1" style="font-size:12px;padding:6px 14px">Done</button>
+        </div></div>`;
+    }
+    function render() {
+      const tI = todayIso();
+      const items = state.log[tI] || [];
+      const T = state.targets;
+      const fd = document.getElementById('food-date');
+      const kt = document.getElementById('kcal-target');
+      if (kt) kt.textContent = `/ ${T.k.toLocaleString()} kcal`;
+      // planned meals (from the Diet planner) first
+      const plan = (window.LifeOS && window.LifeOS.getPlanDay) ? window.LifeOS.getPlanDay(tI) : [];
+      let html = '';
+      plan.forEach(pe => {
+        const logged = items.find(it => it.planKey === pe.key);
+        const shownK = logged ? logged.k : pe.k;
+        const shownP = logged ? logged.p : pe.p;
+        html += `<div class="meal-row${logged ? ' eaten' : ''}">
+          <div class="minfo"><span class="mslot">${esc(pe.slot)} · planned</span><span class="mname">${esc(pe.name)}</span></div>
+          <span class="mkcal">${Math.round(shownK)} kcal${shownP ? ` · P ${Math.round(shownP)}` : ''}${logged && logged.portion && logged.portion !== 1 ? ` · ×${logged.portion}` : ''}</span>
+          <button class="btn editbtn" data-pedit="${pe.key}">Edit</button>
+          <button class="btn eatbtn" data-ptoggle="${pe.key}">${logged ? '✓ Eaten' : 'Log'}</button></div>`;
+        if (openEditor === pe.key) html += plannedEditor(pe, logged);
+      });
+      // everything else logged today (quick-logs, manual adds)
+      const extras = items.map((it, idx) => ({ it, idx })).filter(x => !x.it.planKey);
+      html += extras.map(x =>
+        `<div class="meal-row eaten"><div class="minfo"><span class="mslot">logged</span><span class="mname">${esc(x.it.name)}</span></div>
+         <span class="mkcal">${Math.round(x.it.k)} kcal${x.it.p ? ` · P ${Math.round(x.it.p)}` : ''}</span>
+         <button class="btn editbtn" data-rm="${x.idx}" title="Remove">✕</button></div>`).join('');
+      if (!plan.length && !items.length)
+        html = `<div style="color:var(--muted);font-size:12.5px;padding:4px 0 2px">Nothing logged yet today.</div>`;
+      document.getElementById('food-list').innerHTML = html;
+      let k = 0, p = 0, c = 0, f = 0;
+      items.forEach(it => { k += it.k; p += it.p; c += it.c; f += it.f; });
+      k = Math.round(k);
+      if (fd) fd.textContent = `${plan.length} planned · ${items.length} logged · ${k.toLocaleString()} kcal so far`;
+      document.getElementById('kcal-big').textContent = k.toLocaleString();
+      const rem = T.k - k;
+      document.getElementById('kcal-sub').textContent = rem >= 0
+        ? `${rem.toLocaleString()} kcal remaining`
+        : `${Math.abs(rem).toLocaleString()} kcal over target`;
+      setM('pro', p, T.p); setM('carb', c, T.c); setM('fat', f, T.f);
+      // 7-day average intake -> momentum strip
+      const iv = document.getElementById('strip-intake');
+      if (iv) {
+        let sum = 0, days = 0;
+        for (let o = 0; o < 7; o++) {
+          const d = new Date(); d.setDate(d.getDate() - o);
+          const arr = state.log[iso(d)];
+          if (arr && arr.length) { days++; sum += arr.reduce((s, x) => s + x.k, 0); }
+        }
+        iv.textContent = days ? Math.round(sum / days).toLocaleString() + ' kcal' : '—';
+        const sub = document.getElementById('strip-intake-sub');
+        if (sub) sub.textContent = days
+          ? `avg of ${days} logged day${days > 1 ? 's' : ''} · target ${T.k.toLocaleString()}`
+          : 'no days logged yet';
+      }
+      const pv = document.getElementById('strip-plan');
+      if (pv) {
+        pv.textContent = plan.length ? String(plan.length) : '—';
+        const pk = plan.reduce((s2, x) => s2 + (x.k || 0), 0);
+        const ps = document.getElementById('strip-plan-sub');
+        if (ps) ps.textContent = plan.length ? `meal${plan.length > 1 ? 's' : ''} planned · ${Math.round(pk).toLocaleString()} kcal` : 'nothing planned';
+      }
+      Store.set('foodLive', state);
+      if (window.LifeOS && window.LifeOS.dietRefresh) window.LifeOS.dietRefresh('food');
+    }
+    card.addEventListener('click', e => {
+      const rm = e.target.closest('[data-rm]');
+      if (rm) { dayArr(todayIso()).splice(+rm.dataset.rm, 1); render(); return; }
+      const tog = e.target.closest('[data-ptoggle]');
+      if (tog) {
+        const key = tog.dataset.ptoggle, tI = todayIso();
+        const plan = window.LifeOS.getPlanDay(tI);
+        const pe = plan.find(x => x.key === key);
+        if (!pe) return;
+        const arr = dayArr(tI);
+        const i = arr.findIndex(it => it.planKey === key);
+        if (i >= 0) arr.splice(i, 1);
+        else {
+          arr.push({ name: pe.name, k: pe.k, p: pe.p, c: pe.c, f: pe.f, planKey: key, dishId: pe.dishId, portion: 1 });
+          if (window.LifeOS.noteDishMade) window.LifeOS.noteDishMade(pe.dishId);
+        }
+        render(); return;
+      }
+      const ed = e.target.closest('[data-pedit]');
+      if (ed) { openEditor = openEditor === ed.dataset.pedit ? null : ed.dataset.pedit; render(); return; }
+      const pp = e.target.closest('[data-pp]');
+      if (pp) {
+        const key = pp.dataset.key, m = parseFloat(pp.dataset.pp), tI = todayIso();
+        const pe = window.LifeOS.getPlanDay(tI).find(x => x.key === key);
+        if (!pe) return;
+        const arr = dayArr(tI);
+        const i = arr.findIndex(it => it.planKey === key);
+        const wasLogged = i >= 0;
+        if (wasLogged) arr.splice(i, 1);
+        arr.push({ name: pe.name, k: pe.k * m, p: pe.p * m, c: pe.c * m, f: pe.f * m, planKey: key, dishId: pe.dishId, portion: m });
+        if (!wasLogged && window.LifeOS.noteDishMade) window.LifeOS.noteDishMade(pe.dishId);
+        render(); return;
+      }
+      const dn = e.target.closest('[data-pdone]');
+      if (dn) { openEditor = null; render(); return; }
+    });
+    card.addEventListener('change', e => {
+      const sw = e.target.closest('[data-pswap]');
+      if (!sw) return;
+      const swVal = sw.value !== undefined && sw.value !== '' ? sw.value
+        : ((sw.querySelector('option[selected]') || {}).getAttribute ? sw.querySelector('option[selected]').getAttribute('value') : '');
+      if (!swVal) return;
+      const key = sw.dataset.pswap, tI = todayIso();
+      window.LifeOS.swapPlanEntry(tI, key, swVal);
+      const pe = window.LifeOS.getPlanDay(tI).find(x => x.key === key);
+      const arr = dayArr(tI);
+      const i = arr.findIndex(it => it.planKey === key);
+      if (i >= 0 && pe) {
+        const m = arr[i].portion || 1;
+        arr[i] = { name: pe.name, k: pe.k * m, p: pe.p * m, c: pe.c * m, f: pe.f * m, planKey: key, dishId: pe.dishId, portion: m };
+      }
+      render();
+    });
+    // add flow: name -> macro form (calories required, rest optional)
+    const mform = document.getElementById('food-macro-form');
+    function openForm() {
+      const inp = document.getElementById('food-input');
+      if (!inp.value.trim()) return;
+      document.getElementById('fmf-name').textContent = inp.value.trim();
+      document.getElementById('fmf-err').style.display = 'none';
+      mform.style.display = 'block';
+      document.getElementById('fmf-k').focus();
+    }
+    function closeForm() {
+      mform.style.display = 'none';
+      ['fmf-k', 'fmf-p', 'fmf-c', 'fmf-f'].forEach(i => document.getElementById(i).value = '');
+    }
+    document.getElementById('food-add').addEventListener('click', openForm);
+    document.getElementById('food-input').addEventListener('keydown', e => { if (e.key === 'Enter') openForm(); });
+    document.getElementById('fmf-cancel').addEventListener('click', closeForm);
+    mform.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('fmf-log').click(); });
+    document.getElementById('fmf-log').addEventListener('click', () => {
+      const k = parseFloat(document.getElementById('fmf-k').value);
+      if (!k || k <= 0) {                                   // calories are mandatory
+        document.getElementById('fmf-err').style.display = 'block';
+        document.getElementById('fmf-k').focus();
+        return;
+      }
+      const inp = document.getElementById('food-input');
+      dayArr(todayIso()).push({
+        name: inp.value.trim(), k,
+        p: parseFloat(document.getElementById('fmf-p').value) || 0,
+        c: parseFloat(document.getElementById('fmf-c').value) || 0,
+        f: parseFloat(document.getElementById('fmf-f').value) || 0
+      });
+      inp.value = '';
+      closeForm();
+      render();
+    });
+    // ---- cross-module surface (read-only getters + explicit writers) ----
+    window.LifeOS = window.LifeOS || {};
+    window.LifeOS.getFoodDay = isoStr => (state.log[isoStr] || []).map(it =>
+      ({ name: it.name, k: it.k, p: it.p, c: it.c, f: it.f, planKey: it.planKey, dishId: it.dishId, portion: it.portion }));
+    window.LifeOS.getTargets = () => ({ ...state.targets });
+    window.LifeOS.setTargets = t => {
+      state.targets = { k: +t.k || 2400, p: +t.p || 0, c: +t.c || 0, f: +t.f || 0 };
+      render();
+    };
+    window.LifeOS.logFood = (dayIso, item) => { dayArr(dayIso).push(item); render(); };
+    window.LifeOS.dietFoodRefresh = render;            // diet planner changes re-render the dashboard card
+    window.LifeOS.removeFoodAt = (dayIso, idx) => {
+      if (state.log[dayIso]) { state.log[dayIso].splice(idx, 1); render(); }
+    };
+    // ---- past-day editor: fix any day's log ----
+    const pdEl = document.createElement('div');
+    pdEl.id = 'pastday-pop';
+    pdEl.style.cssText = 'position:fixed;inset:0;z-index:80;display:none;background:rgba(4,7,11,0.62);overflow:auto;padding:6vh 14px;';
+    document.body.appendChild(pdEl);
+    let pdIso = null;
+    function renderPd() {
+      if (!pdIso) { pdEl.style.display = 'none'; return; }
+      const items = state.log[pdIso] || [];
+      const dt = new Date(pdIso + 'T12:00:00');
+      const k = Math.round(items.reduce((a, x) => a + x.k, 0));
+      const dishes = (window.LifeOS && window.LifeOS.getDishes) ? window.LifeOS.getDishes() : [];
+      pdEl.innerHTML = `<div style="max-width:560px;margin:0 auto;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,0.5)">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+          <b style="font-size:15px">Edit day</b>
+          <input class="hb-input" type="date" id="pd-date" value="${pdIso}" max="${todayIso()}" style="font-size:12.5px">
+          <span style="color:var(--ink-2);font-size:12.5px">${k.toLocaleString()} kcal</span>
+          <button class="btn primary" data-pdclose="1" style="margin-left:auto;font-size:12px;padding:6px 16px">Done</button>
+        </div>
+        <div style="color:var(--muted);font-size:11px;margin-bottom:10px">${dt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</div>
+        ${items.length ? items.map((it, idx) =>
+          `<div class="meal-row eaten" style="margin-bottom:6px"><div class="minfo"><span class="mslot">${it.planKey ? 'planned' : 'logged'}</span><span class="mname">${esc(it.name)}</span></div>
+           <span class="mkcal">${Math.round(it.k)} kcal${it.p ? ` · P ${Math.round(it.p)}` : ''}</span>
+           <button class="btn editbtn" data-pdrm="${idx}" style="margin-left:2px">✕</button></div>`).join('')
+          : '<div style="color:var(--muted);font-size:12.5px;margin-bottom:6px">Nothing logged on this day.</div>'}
+        ${dishes.length ? `<div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin:12px 0 7px">Quick-log a dish to this day</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px">
+          ${dishes.map(d => `<button class="btn" data-pdql="${d.id}" style="font-size:12px">${esc(d.name)} · ${Math.round(d.k)}</button>`).join('')}
+        </div>` : ''}
+        <div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin:12px 0 7px">Or add manually — calories required</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <input class="hb-input" id="pd-name" placeholder="Name…" style="flex:1;min-width:130px">
+          <input class="hb-input" id="pd-k" type="number" min="1" placeholder="kcal *" style="width:76px">
+          <input class="hb-input" id="pd-p" type="number" min="0" placeholder="P" style="width:58px">
+          <input class="hb-input" id="pd-c" type="number" min="0" placeholder="C" style="width:58px">
+          <input class="hb-input" id="pd-f" type="number" min="0" placeholder="F" style="width:58px">
+          <button class="btn" data-pdadd="1">Add</button>
+        </div>
+        <div id="pd-err" style="display:none;color:var(--warning);font-size:11px;margin-top:6px">Name and calories are required.</div>
+      </div>`;
+      pdEl.style.display = 'block';
+    }
+    pdEl.addEventListener('click', e => {
+      if (e.target === pdEl) { pdIso = null; renderPd(); return; }
+      const B = a => e.target.closest(`[data-${a}]`);
+      let x;
+      if (B('pdclose')) { pdIso = null; renderPd(); return; }
+      if (x = B('pdrm')) { (state.log[pdIso] || []).splice(+x.dataset.pdrm, 1); render(); renderPd(); return; }
+      if (x = B('pdql')) {
+        const d = ((window.LifeOS && window.LifeOS.getDishes) ? window.LifeOS.getDishes() : []).find(y => y.id === x.dataset.pdql);
+        if (d) { dayArr(pdIso).push({ name: d.name, k: d.k, p: d.p, c: d.c, f: d.f, dishId: d.id }); if (window.LifeOS.noteDishMade) window.LifeOS.noteDishMade(d.id); render(); renderPd(); }
+        return;
+      }
+      if (B('pdadd')) {
+        const nm = (document.getElementById('pd-name') || { value: '' }).value.trim();
+        const kv = parseFloat((document.getElementById('pd-k') || {}).value);
+        if (!nm || !kv || kv <= 0) { const er = document.getElementById('pd-err'); if (er) er.style.display = 'block'; return; }
+        dayArr(pdIso).push({ name: nm, k: kv,
+          p: parseFloat((document.getElementById('pd-p') || {}).value) || 0,
+          c: parseFloat((document.getElementById('pd-c') || {}).value) || 0,
+          f: parseFloat((document.getElementById('pd-f') || {}).value) || 0 });
+        render(); renderPd(); return;
+      }
+    });
+    pdEl.addEventListener('change', e => {
+      if (e.target.id === 'pd-date' && e.target.value) { pdIso = e.target.value; renderPd(); }
+    });
+    window.LifeOS.editFoodDay = isoStr => { pdIso = isoStr || todayIso(); renderPd(); };
+
+    // demo seeding: 6 months of history (only days with no entries)
+    window.LifeOS.demoFood = () => {
+      const items = [['Eggs + oats', 520, 38, 52, 18], ['Chicken rice bowl', 720, 58, 82, 16],
+                     ['Protein shake', 180, 30, 8, 3], ['Chicken stir fry', 520, 45, 42, 20],
+                     ['Greek yogurt bowl', 340, 28, 40, 8], ['Turkey chili', 480, 44, 38, 14],
+                     ['Salmon + rice', 640, 48, 62, 20], ['Almonds (1 oz)', 160, 6, 6, 14]];
+      for (let o = 183; o >= 1; o--) {                      // 6 months of history
+        if ((o * 13) % 10 === 0) continue;                  // ~10% of days unlogged (realistic)
+        const d = new Date(); d.setDate(d.getDate() - o);
+        const key = iso(d);
+        if (state.log[key] && state.log[key].length) continue;
+        state.log[key] = [];
+        for (let j = 0; j < 3 + ((o + o % 5) % 2); j++) {
+          const it = items[(o + j * 3) % items.length];
+          state.log[key].push({ name: it[0], k: it[1], p: it[2], c: it[3], f: it[4], demo: true });
+        }
+      }
+      render();
+    };
+    window.LifeOS.hasDemoFood = () => Object.values(state.log).some(arr => arr.some(it => it.demo));
+    window.LifeOS.wipeDemoFood = () => {
+      for (const k of Object.keys(state.log)) {
+        state.log[k] = state.log[k].filter(it => !it.demo);
+        if (!state.log[k].length) delete state.log[k];
+      }
+      render();
+    };
+    window.LifeOS.wipeAllFood = () => { state = { log: {}, targets: { k: 2400, p: 180, c: 250, f: 70 } }; render(); };
+    Store.ready.then(() => {
+      const saved = Store.get('foodLive');
+      if (saved && saved.log) state = saved;
+      if (!state.targets) state.targets = { k: 2400, p: 180, c: 250, f: 70 };
+      render();
+      setInterval(render, 60000);                           // midnight: today's card resets, history kept
+    });
+  })();
+
+  // ================= DASHBOARD CARDS — click-to-expand =================
+  (function () {
+    const cards = [['food', 'food-head', 'food-collapse', 'food-chev'], ['shop', 'shop-head', 'shop-collapse', 'shop-chev']];
+    const apply = (key, open) => {
+      const [, , cid, chid] = cards.find(c => c[0] === key);
+      const c = document.getElementById(cid), ch = document.getElementById(chid);
+      if (c) c.style.display = open ? '' : 'none';
+      if (ch) ch.textContent = open ? '▾' : '▸';
+    };
+    const state = { food: false, shop: false };
+    cards.forEach(([key, hid]) => {
+      const h = document.getElementById(hid);
+      if (!h) return;
+      h.addEventListener('click', () => {
+        state[key] = !state[key];
+        apply(key, state[key]);
+        Store.ready.then(() => Store.set('ui', { ...(Store.get('ui') || {}), [key + 'Open']: state[key] }));
+      });
+    });
+    Store.ready.then(() => {
+      const ui = Store.get('ui') || {};
+      cards.forEach(([key]) => { state[key] = !!ui[key + 'Open']; apply(key, state[key]); });
+    });
+    // dashboard quick actions
+    const qaMeal = document.getElementById('qa-meal');
+    if (qaMeal) qaMeal.addEventListener('click', () => {
+      if (!state.food) document.getElementById('food-head').click();   // expand (also persists)
+      const inp = document.getElementById('food-input');
+      if (inp) { inp.focus(); if (inp.scrollIntoView) inp.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+    });
+    const qaWeigh = document.getElementById('qa-weigh');
+    if (qaWeigh) qaWeigh.addEventListener('click', () => {
+      const nav = document.querySelector('.nav-item[data-page="weight"]');
+      if (nav) nav.click();                                            // full nav flow (persists page)
+      setTimeout(() => { const w = document.getElementById('wt-input'); if (w) w.focus(); }, 50);
+    });
+  })();
+
+  // ================= TARGETS POPUP — "Set calories" on the Weight tab =================
+  (function () {
+    const btn = document.getElementById('set-cal');
+    if (!btn) return;
+    const pop = document.createElement('div');
+    pop.className = 'hb-cal';
+    pop.style.width = '300px';
+    document.body.appendChild(pop);
+    function open() {
+      const T = (window.LifeOS && window.LifeOS.getTargets) ? window.LifeOS.getTargets() : { k: 2400, p: 180, c: 250, f: 70 };
+      pop.innerHTML = `<b style="font-size:13px">Calorie & macro goals</b>
+        <div style="display:flex;flex-direction:column;gap:9px;margin:12px 0 14px">` +
+        [['Calories', 'tp-k', T.k, 'kcal'], ['Protein', 'tp-p', T.p, 'g'], ['Carbs', 'tp-c', T.c, 'g'], ['Fat', 'tp-f', T.f, 'g']].map(r =>
+          `<div style="display:flex;align-items:center;gap:10px"><span style="width:62px;font-size:13px;color:var(--ink-2)">${r[0]}</span>
+           <input class="hb-input" id="${r[1]}" type="number" min="0" value="${r[2]}" style="width:110px">
+           <span style="font-size:12px;color:var(--muted)">${r[3]}</span></div>`).join('') +
+        `</div>
+        <div id="tp-err" style="display:none;color:var(--warning);font-size:11px;margin-bottom:8px">Calories are required.</div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn" data-tpact="cancel" style="font-size:11.5px;padding:5px 13px">Cancel</button>
+          <button class="btn primary" data-tpact="save" style="font-size:11.5px;padding:5px 13px">Save</button>
+        </div>`;
+      const r = btn.getBoundingClientRect();
+      const left = Math.max(8, Math.min(window.innerWidth - 308, r.right - 300));
+      pop.style.left = left + 'px';
+      pop.style.top = Math.min(window.innerHeight - 320, r.bottom + 8) + 'px';
+      pop.style.display = 'block';
+    }
+    btn.addEventListener('click', e => { e.stopPropagation(); pop.style.display === 'block' ? pop.style.display = 'none' : open(); });
+    pop.addEventListener('click', e => {
+      e.stopPropagation();
+      const act = e.target.dataset.tpact;
+      if (!act) return;
+      if (act === 'save') {
+        const k = parseFloat(document.getElementById('tp-k').value);
+        if (!k || k <= 0) { document.getElementById('tp-err').style.display = 'block'; return; }
+        window.LifeOS.setTargets({ k,
+          p: parseFloat(document.getElementById('tp-p').value) || 0,
+          c: parseFloat(document.getElementById('tp-c').value) || 0,
+          f: parseFloat(document.getElementById('tp-f').value) || 0 });
+      }
+      pop.style.display = 'none';
+    });
+    document.addEventListener('click', e => { if (pop.style.display === 'block' && !pop.contains(e.target) && e.target !== btn) pop.style.display = 'none'; });
+  })();
+
+  // ================= BACKUP — export / import the whole store =================
+  (function () {
+    const ex = document.getElementById('bk-export');
+    if (!ex) return;
+    const ok = msg => { const el = document.getElementById('bk-ok'); if (el) { el.textContent = msg; el.style.display = 'inline'; setTimeout(() => el.style.display = 'none', 3000); } };
+    ex.addEventListener('click', () => {
+      Store.ready.then(() => {
+        try {
+          const data = JSON.stringify(Store.cache || {}, null, 2);
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+          const d = new Date();
+          a.download = `fuelos-backup-${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}.json`;
+          document.body.appendChild(a); a.click(); a.remove();
+          ok('✓ downloaded');
+        } catch (e) { ok('export not supported here'); }
+      });
+    });
+    const doImport = data => {
+      if (!data || typeof data !== 'object') return false;
+      const KNOWN = ['ui', 'foodLive', 'dietLive', 'shoppingLive', 'weightLive'];
+      if (!KNOWN.some(k => k in data)) return false;
+      KNOWN.forEach(k => { if (k in data) Store.set(k, data[k]); });
+      return true;
+    };
+    window.LifeOS = window.LifeOS || {};
+    window.LifeOS.importBackup = doImport;
+    const fi = document.getElementById('bk-file'), im = document.getElementById('bk-import');
+    if (im && fi) {
+      im.addEventListener('click', () => fi.click());
+      fi.addEventListener('change', () => {
+        const f = fi.files && fi.files[0];
+        if (!f) return;
+        f.text().then(t => {
+          let d; try { d = JSON.parse(t); } catch (e) { ok('not a valid backup'); return; }
+          if (doImport(d)) { ok('✓ imported — reloading'); setTimeout(() => { try { location.reload(); } catch (e) {} }, 600); }
+          else ok('not a valid backup');
+        });
+      });
+    }
+  })();
+
+  // ================= PWA — installable app shell (activates only when hosted) =================
+  try {
+    if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+      if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+    }
+  } catch (e) {}
+
+  // ================= GREETING — dashboard date =================
+  (function () {
+    function tick() {
+      const n = new Date();
+      const dd = document.getElementById('dash-date');
+      if (dd) dd.textContent = n.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+      const gr = document.getElementById('dash-greet');
+      if (gr) gr.textContent = (n.getHours() < 12 ? 'Good morning' : n.getHours() < 18 ? 'Good afternoon' : 'Good evening') + ', AJ';
+    }
+    tick(); setInterval(tick, 60000);
+  })();
+
+  // ===== TEMP: dev data controls controller =====
+  // Safe to delete this whole IIFE (and/or the sidebar TEMP block) at any time:
+  // it exits immediately if the buttons aren't in the DOM, and the LifeOS.demo*/
+  // wipe* hooks it calls are inert helpers that nothing else uses.
+  (function () {
+    const $ = id => document.getElementById(id);
+    const loadBtns = [$('settings-demo'), $('sp-demo')].filter(Boolean);
+    if (!loadBtns.length) return;
+    const wipeBtns = [$('settings-demo-wipe'), $('sp-demo-wipe')].filter(Boolean);
+    const okEls = [$('settings-demo-ok'), $('sp-demo-ok')].filter(Boolean);
+    const allBtns = [$('wipe-all'), $('sp-wipe-all')].filter(Boolean);
+    const L = () => window.LifeOS || {};
+    const DEMO = ['demoDiet', 'demoFood', 'demoShopping', 'demoWeight'];
+    const HAS = ['hasDemoDiet', 'hasDemoFood', 'hasDemoShopping', 'hasDemoWeight'];
+    const WIPE = ['wipeDemoDiet', 'wipeDemoFood', 'wipeDemoShopping', 'wipeDemoWeight'];
+    const WIPEALL = ['wipeAllDiet', 'wipeAllFood', 'wipeAllShopping', 'wipeAllWeight'];
+    const call = names => { const x = L(); names.forEach(n => x[n] && x[n]()); };
+    const hasDemo = () => { const x = L(); return HAS.some(n => x[n] && x[n]()); };
+    const refresh = () => { const show = hasDemo() ? '' : 'none'; wipeBtns.forEach(b => b.style.display = show); };
+    const flash = msg => okEls.forEach(ok => { ok.textContent = msg; ok.style.display = 'inline'; setTimeout(() => ok.style.display = 'none', 3000); });
+    loadBtns.forEach(b => b.addEventListener('click', () => { call(DEMO); flash('✓ loaded'); refresh(); }));
+    wipeBtns.forEach(b => b.addEventListener('click', () => { call(WIPE); flash('✓ demo wiped'); refresh(); }));
+    // wipe ALL data — confirmation required
+    const conf = document.createElement('div');
+    conf.className = 'hb-cal';
+    conf.style.width = '300px';
+    document.body.appendChild(conf);
+    allBtns.forEach(b => b.addEventListener('click', () => {
+      conf.innerHTML = `<b style="font-size:13px">Wipe ALL data?</b>
+        <div style="font-size:11.5px;color:var(--ink-2);line-height:1.5;margin:8px 0 12px">
+          ⚠️ This permanently deletes <b style="color:var(--ink)">everything</b> — every food log, weigh-in, dish, plan, and shopping item. There is no undo.</div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn" data-wact="cancel" style="font-size:11.5px;padding:5px 13px">Cancel</button>
+          <button class="btn primary" data-wact="wipe" style="font-size:11.5px;padding:5px 13px">Wipe everything</button>
+        </div>`;
+      conf.style.left = 'calc(50% - 150px)'; conf.style.top = '32%';
+      conf.style.display = 'block';
+    }));
+    conf.addEventListener('click', e => {
+      const act = e.target.dataset.wact;
+      if (!act) return;
+      if (act === 'wipe') { call(WIPEALL); flash('✓ all data wiped'); refresh(); }
+      conf.style.display = 'none';
+    });
+    Store.ready.then(() => setTimeout(refresh, 120));       // wipe-demo button appears if demo data was saved
+  })();
+
+  document.querySelectorAll('.addrow input').forEach(inp => {
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { const b = inp.closest('.addrow').querySelector('button'); if (b.dataset.add) b.click(); }
+    });
+  });
+
+  // ================= WEIGHT — live, per-day weigh-ins (store: weightLive) =================
+  (function () {
+    const chart = document.getElementById('wt-chart');
+    if (!chart) return;
+    const NS = 'http://www.w3.org/2000/svg';
+    const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+    const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const fmt = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const X0 = 45, X1 = 548, TOP = 14, BOT = 184;
+    let state = { entries: {}, goal: null };               // entries[iso] = {w, demo?}
+    let range = 90;
+    let view = null;
+    const el = (tag, attrs, text) => {
+      const n = document.createElementNS(NS, tag);
+      for (const k in attrs) n.setAttribute(k, attrs[k]);
+      if (text != null) n.textContent = text;
+      return n;
+    };
+    function render() {
+      const today = new Date();
+      const start = addDays(today, -(range - 1));
+      const days = [];
+      for (let i = 0; i < range; i++) {
+        const d = addDays(start, i);
+        days.push({ date: d, iso: iso(d), x: X0 + i / (range - 1) * (X1 - X0) });
+      }
+      const grid = document.getElementById('wt-grid'); grid.innerHTML = '';
+      const axis = document.getElementById('wt-axis'); axis.innerHTML = '';
+      const goalG = document.getElementById('wt-goal'); goalG.innerHTML = '';
+      const minorEvery = range <= 90 ? 1 : 7;
+      days.forEach((dv, i) => {
+        const dt = dv.date, x = dv.x;
+        const monthStart = dt.getDate() === 1, monday = dt.getDay() === 1;
+        if (monthStart) {
+          axis.appendChild(el('line', { x1: x, y1: BOT, x2: x, y2: BOT + 8, stroke: 'rgba(151,173,200,0.50)', 'stroke-width': 1.2 }));
+          axis.appendChild(el('text', { x: x - 2, y: BOT + 34, fill: '#a9b3c1', 'font-size': 9.5, 'font-weight': 600, 'font-family': 'system-ui' },
+            MON[dt.getMonth()] + (dt.getMonth() === 0 ? " '" + String(dt.getFullYear()).slice(2) : '')));
+        } else if (i % minorEvery === 0) {
+          axis.appendChild(el('line', { x1: x, y1: BOT, x2: x, y2: BOT + (monday ? 6 : 3.5), stroke: monday ? 'rgba(151,173,200,0.35)' : 'rgba(151,173,200,0.18)', 'stroke-width': 1 }));
+        }
+        if (monday && !monthStart && range <= 180 && (range <= 90 || Math.floor(i / 7) % 2 === 0)) {
+          axis.appendChild(el('text', { x: x - 4, y: BOT + 20, fill: '#6e7a8a', 'font-size': 8.5, 'font-family': 'system-ui' }, dt.getDate()));
+        }
+      });
+      axis.appendChild(el('line', { x1: X0, y1: BOT, x2: X1, y2: BOT, stroke: 'rgba(151,173,200,0.35)', 'stroke-width': 1 }));
+      // real data points in the window
+      const pts = [];
+      days.forEach(dv => { const e = state.entries[dv.iso]; if (e) pts.push({ x: dv.x, w: e.w, iso: dv.iso, date: dv.date }); });
+      const line = document.getElementById('wt-line'), area = document.getElementById('wt-area');
+      const oldEmpty = document.getElementById('wt-empty'); if (oldEmpty) oldEmpty.remove();
+      chart.querySelectorAll('.wt-dot').forEach(n => n.remove());
+      let w2y = null;
+      if (!pts.length) {
+        line.setAttribute('d', ''); area.setAttribute('d', '');
+        chart.appendChild(el('text', { x: (X0 + X1) / 2, y: 100, fill: '#6e7a8a', 'font-size': 12, 'text-anchor': 'middle', 'font-family': 'system-ui', id: 'wt-empty' },
+          'No weigh-ins in this range — log one below.'));
+      } else {
+        let lo = Math.min(...pts.map(p => p.w)), hi = Math.max(...pts.map(p => p.w));
+        if (state.goal != null) { lo = Math.min(lo, state.goal); hi = Math.max(hi, state.goal); }
+        lo -= 0.8; hi += 0.8;
+        const span = hi - lo;
+        const step = span / 0.5 <= 8 ? 0.5 : span / 1 <= 8 ? 1 : span / 2 <= 8 ? 2 : span / 5 <= 8 ? 5 : 10;
+        lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
+        w2y = w => BOT - (w - lo) / (hi - lo) * (BOT - TOP);
+        for (let v = lo; v <= hi + 1e-9; v += step) {
+          const y = w2y(v);
+          grid.appendChild(el('line', { x1: X0 - 4, y1: y, x2: X1, y2: y, stroke: '#202836', 'stroke-width': 1 }));
+          grid.appendChild(el('text', { x: 6, y: y + 3.5, fill: '#6e7a8a', 'font-size': 10, 'font-family': 'system-ui' }, v % 1 ? v.toFixed(1) : v));
+        }
+        pts.forEach(p => p.y = w2y(p.w));
+        let path = '';
+        pts.forEach((p, i) => path += (i ? 'L' : 'M') + p.x.toFixed(1) + ',' + p.y.toFixed(1));
+        line.setAttribute('d', path);
+        area.setAttribute('d', pts.length > 1 ? path + `L${pts[pts.length - 1].x.toFixed(1)},${BOT}L${pts[0].x.toFixed(1)},${BOT}Z` : '');
+        pts.forEach(p => chart.insertBefore(
+          el('circle', { cx: p.x.toFixed(1), cy: p.y.toFixed(1), r: pts.length > 60 ? 2 : 3, fill: '#4a8fdf', class: 'wt-dot' }),
+          goalG));
+        if (state.goal != null) {
+          const y = w2y(state.goal);
+          goalG.appendChild(el('line', { x1: X0, y1: y, x2: X1, y2: y, stroke: '#6e7a8a', 'stroke-width': 1.5, 'stroke-dasharray': '5 5' }));
+          goalG.appendChild(el('text', { x: X1 - 74, y: y - 5, fill: '#a9b3c1', 'font-size': 10.5, 'font-family': 'system-ui' }, 'Goal · ' + state.goal + ' lb'));
+        }
+      }
+      view = { days, pts, w2y };
+      // tiles from real data
+      const all = Object.keys(state.entries).sort();
+      const cur = all.length ? state.entries[all[all.length - 1]].w : null;
+      const avgOver = (from, to) => { let s = 0, n = 0; for (let o = from; o < to; o++) { const e = state.entries[iso(addDays(today, -o))]; if (e) { s += e.w; n++; } } return n ? s / n : null; };
+      const avg7 = avgOver(0, 7), prev7 = avgOver(7, 14);
+      const cut90 = iso(addDays(today, -90));
+      const win90 = all.filter(k => k >= cut90);
+      const d90 = win90.length >= 2 ? state.entries[win90[win90.length - 1]].w - state.entries[win90[0]].w : null;
+      const tile = (l, v, s) => `<div class="tile" style="box-shadow:none;background:var(--surface-2)"><div class="label">${l}</div><div class="value">${v}</div><div class="sub">${s}</div></div>`;
+      document.getElementById('wt-tiles').innerHTML =
+        tile('Current', cur != null ? cur.toFixed(1) + ' lb' : '—', all.length ? 'last logged ' + all[all.length - 1] : 'no weigh-ins yet') +
+        tile('7-day average', avg7 != null ? avg7.toFixed(1) + ' lb' : '—',
+          (avg7 != null && prev7 != null) ? ((avg7 - prev7 <= 0 ? '▼ ' : '▲ ') + Math.abs(avg7 - prev7).toFixed(1) + ' vs prior week') : 'log more to see trend') +
+        tile('Last 90 days', d90 != null ? ((d90 <= 0 ? '▼ ' : '▲ ') + Math.abs(d90).toFixed(1) + ' lb') : '—', d90 != null ? 'first vs latest entry' : 'need 2+ entries') +
+        tile(state.goal != null ? 'Goal · ' + state.goal + ' lb' : 'Goal',
+          (state.goal != null && cur != null) ? Math.abs(cur - state.goal).toFixed(1) + ' to go' : '—',
+          state.goal != null ? 'change it below' : 'set one below');
+      // dashboard momentum tile
+      const sw = document.getElementById('strip-weight');
+      if (sw) {
+        sw.textContent = cur != null ? cur.toFixed(1) + ' lb' : '—';
+        const sub = document.getElementById('strip-weight-sub');
+        if (sub) sub.textContent = (avg7 != null && prev7 != null)
+          ? ((avg7 - prev7 <= 0 ? '▼ ' : '▲ ') + Math.abs(avg7 - prev7).toFixed(1) + ' vs prior week')
+          : (cur != null ? 'log more to see trend' : 'no weigh-ins yet');
+      }
+      Store.set('weightLive', state);
+    }
+    // ---- interactions: crosshair / brush / day panel ----
+    const brush = document.getElementById('brush'), readout = document.getElementById('wt-readout');
+    const daypanel = document.getElementById('wt-daypanel'), cross = document.getElementById('wt-cross');
+    const svgX = e => { const r = chart.getBoundingClientRect(); return Math.max(X0, Math.min(X1, (e.clientX - r.left) * 560 / r.width)); };
+    const dayAt = x => view.days[Math.max(0, Math.min(view.days.length - 1, Math.round((x - X0) / (X1 - X0) * (view.days.length - 1))))];
+    function crosshair(x) {
+      if (!view) return;
+      const dv = dayAt(x);
+      document.getElementById('wt-cross-line').setAttribute('x1', dv.x);
+      document.getElementById('wt-cross-line').setAttribute('x2', dv.x);
+      const e = state.entries[dv.iso];
+      const dot = document.getElementById('wt-cross-dot');
+      if (e && view.w2y) { dot.setAttribute('visibility', 'visible'); dot.setAttribute('cx', dv.x); dot.setAttribute('cy', view.w2y(e.w)); }
+      else dot.setAttribute('visibility', 'hidden');
+      const lbl = document.getElementById('wt-cross-label');
+      lbl.textContent = fmt(dv.date) + (e ? ` · ${e.w.toFixed(1)} lb` : '');
+      lbl.setAttribute('x', Math.min(Math.max(dv.x - 40, X0), X1 - 95));
+      cross.setAttribute('visibility', 'visible');
+    }
+    function report(a, b) {
+      const d0 = dayAt(Math.min(a, b)), d1 = dayAt(Math.max(a, b));
+      const i0 = view.days.indexOf(d0), i1 = view.days.indexOf(d1);
+      let kc = 0, pr = 0, nd = 0;
+      const F = (window.LifeOS && window.LifeOS.getFoodDay) ? window.LifeOS.getFoodDay : null;
+      for (let i = i0; i <= i1; i++) {
+        const arr = F ? F(view.days[i].iso) : [];
+        if (arr.length) { nd++; kc += arr.reduce((s, x) => s + x.k, 0); pr += arr.reduce((s, x) => s + (x.p || 0), 0); }
+      }
+      const lo = Math.min(a, b) - 1, hi = Math.max(a, b) + 1;
+      const win = view.pts.filter(p => p.x >= lo && p.x <= hi);
+      const dw = win.length >= 2 ? win[win.length - 1].w - win[0].w : null;
+      document.getElementById('wt-readout-range').textContent = `${fmt(d0.date)} – ${fmt(d1.date)} (${i1 - i0 + 1} days)`;
+      document.getElementById('wt-readout-kcal').textContent = nd ? `avg ${Math.round(kc / nd).toLocaleString()} kcal/day (${nd} logged)` : 'no food logged in range';
+      document.getElementById('wt-readout-protein').textContent = nd ? `avg ${Math.round(pr / nd)} g protein` : '—';
+      document.getElementById('wt-readout-weight').textContent = dw != null ? `weight ${dw <= 0 ? '▼' : '▲'} ${Math.abs(dw).toFixed(1)} lb` : 'weight: need 2+ entries in range';
+      readout.style.display = 'block';
+    }
+    function showDay(dv) {
+      const e = state.entries[dv.iso];
+      const F = (window.LifeOS && window.LifeOS.getFoodDay) ? window.LifeOS.getFoodDay(dv.iso) : [];
+      const kcal = F.reduce((s, x) => s + x.k, 0);
+      document.getElementById('wt-day-title').textContent = dv.date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      document.getElementById('wt-day-body').innerHTML =
+        `<div><div style="color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Food</div>` +
+        (F.length
+          ? F.map(it => `<div style="display:flex;justify-content:space-between;padding:3px 0"><span>${it.name}</span><span style="color:var(--ink-2)">${Math.round(it.k)}</span></div>`).join('') +
+            `<div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);margin-top:6px;padding-top:6px;font-weight:700"><span>Total</span><span>${Math.round(kcal).toLocaleString()} kcal</span></div>`
+          : '<div style="color:var(--muted)">nothing logged</div>') + `</div>` +
+        `<div><div style="color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Body</div>` +
+        `<div style="padding:3px 0"><span style="color:var(--muted)">Weight · </span>${e ? e.w.toFixed(1) + ' lb' : 'not logged'}</div></div>`;
+      daypanel.dataset.iso = dv.iso;
+      daypanel.style.display = 'block';
+    }
+    document.getElementById('wt-day-close').addEventListener('click', () => daypanel.style.display = 'none');
+    document.querySelectorAll('.rangebtn').forEach(b => b.addEventListener('click', () => {
+      document.querySelectorAll('.rangebtn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      range = +b.dataset.days;
+      render();
+    }));
+    let dragStart = null, moved = false;
+    chart.addEventListener('pointerdown', e => { dragStart = svgX(e); moved = false; chart.setPointerCapture(e.pointerId); });
+    chart.addEventListener('pointermove', e => {
+      const x = svgX(e);
+      if (dragStart === null) { crosshair(x); return; }
+      if (Math.abs(x - dragStart) > 6) moved = true;
+      if (moved) {
+        cross.setAttribute('visibility', 'hidden');
+        const l = Math.min(dragStart, x), h = Math.max(dragStart, x);
+        brush.setAttribute('x', l); brush.setAttribute('width', h - l); brush.setAttribute('visibility', 'visible');
+        report(dragStart, x);
+      }
+    });
+    chart.addEventListener('pointerup', e => {
+      if (dragStart === null) return;
+      const x = svgX(e);
+      if (moved) report(dragStart, x);
+      else if (view) showDay(dayAt(x));
+      brush.setAttribute('visibility', 'hidden');
+      dragStart = null; moved = false;
+    });
+    chart.addEventListener('pointerleave', () => { if (dragStart === null) cross.setAttribute('visibility', 'hidden'); });
+    // ---- logging + goal ----
+    const isoToday = () => iso(new Date());
+    const wconf = document.createElement('div');           // one weigh-in per day — confirm before replacing
+    wconf.className = 'hb-cal';
+    wconf.style.width = '300px';
+    document.body.appendChild(wconf);
+    function saveWeighIn(v) {
+      state.entries[isoToday()] = { w: v };
+      document.getElementById('wt-input').value = '';
+      render();
+    }
+    document.getElementById('wt-log').addEventListener('click', () => {
+      const inp = document.getElementById('wt-input');
+      const v = parseFloat(inp.value);
+      if (!v || v <= 0) return;
+      const existing = state.entries[isoToday()];
+      if (existing && existing.w !== v) {
+        wconf.innerHTML = `<b style="font-size:13px">Already weighed in today</b>
+          <div style="font-size:11.5px;color:var(--ink-2);line-height:1.5;margin:8px 0 12px">
+            Only one weigh-in per day. Change today's entry from <b style="color:var(--ink)">${existing.w.toFixed(1)} lb</b> to <b style="color:var(--ink)">${v.toFixed(1)} lb</b>?</div>
+          <div style="display:flex;gap:8px;justify-content:flex-end">
+            <button class="btn" data-wtc="cancel" style="font-size:11.5px;padding:5px 13px">Keep ${existing.w.toFixed(1)}</button>
+            <button class="btn primary" data-wtc="save" data-wtv="${v}" style="font-size:11.5px;padding:5px 13px">Change it</button>
+          </div>`;
+        const r = inp.getBoundingClientRect ? inp.getBoundingClientRect() : { left: 0, top: 200, bottom: 220 };
+        wconf.style.left = Math.max(8, Math.min((window.innerWidth || 1200) - 308, r.left)) + 'px';
+        wconf.style.top = (r.top - 150 > 0 ? r.top - 150 : r.bottom + 8) + 'px';
+        wconf.style.display = 'block';
+        return;
+      }
+      if (existing) { inp.value = ''; return; }             // same value re-entered — nothing to change
+      saveWeighIn(v);
+    });
+    wconf.addEventListener('click', e => {
+      const act = e.target.dataset.wtc;
+      if (!act) return;
+      if (act === 'save') saveWeighIn(parseFloat(e.target.dataset.wtv));
+      wconf.style.display = 'none';
+    });
+    document.getElementById('wt-input').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('wt-log').click(); });
+    document.getElementById('wt-goal-set').addEventListener('click', () => {
+      const inp = document.getElementById('wt-goal-in');
+      const v = parseFloat(inp.value);
+      state.goal = (v && v > 0) ? v : null;
+      inp.value = '';
+      render();
+    });
+    // TEMP demo hooks
+    window.LifeOS = window.LifeOS || {};
+    window.LifeOS.demoWeight = () => {
+      const t = new Date();
+      for (let o = 183; o >= 0; o--) {                      // 6 months of history
+        if (o % 2 === 1 && o % 3 !== 0) continue;           // sparse, realistic logging cadence
+        const key = iso(addDays(t, -o));
+        if (state.entries[key]) continue;
+        const w = 192.5 - (183 - o) * 0.05 + ((o * 7) % 10) / 10 - 0.4;
+        state.entries[key] = { w: Math.round(w * 10) / 10, demo: true };
+      }
+      render();
+    };
+    window.LifeOS.hasDemoWeight = () => Object.values(state.entries).some(e => e.demo);
+    window.LifeOS.wipeDemoWeight = () => {
+      for (const k of Object.keys(state.entries)) if (state.entries[k].demo) delete state.entries[k];
+      render();
+    };
+    window.LifeOS.wipeAllWeight = () => { state = { entries: {}, goal: null }; render(); };
+    Store.ready.then(() => {
+      const saved = Store.get('weightLive');
+      if (saved && saved.entries) state = saved;
+      render();
+      setInterval(render, 60000);
+    });
+  })();
+
+  // ================= SHOPPING — live, persistent (store: shoppingLive) =================
+  (function () {
+    const dash = document.getElementById('shop-dash-list');
+    if (!dash) return;
+    const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const tIso = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+    let items = [];                                        // {text, checked, checkedIso, addedIso, demo?}
+    function render() {
+      const cdt = new Date(); cdt.setDate(cdt.getDate() - 3);
+      const cutIso = cdt.getFullYear() + '-' + String(cdt.getMonth() + 1).padStart(2, '0') + '-' + String(cdt.getDate()).padStart(2, '0');
+      items = items.filter(it => !(it.checked && it.checkedIso && it.checkedIso < cutIso));   // checked items auto-clear after 3 days
+      const row = (x, pfx) => `<div class="check-item${x.it.checked ? ' done' : ''}">
+        <input type="checkbox" data-si="${x.i}" id="${pfx}${x.i}"${x.it.checked ? ' checked' : ''}>
+        <label for="${pfx}${x.i}">${esc(x.it.text)}</label>
+        <button class="btn editbtn" data-sdel="${x.i}" style="font-size:11px;padding:3px 10px" title="Remove">✕</button></div>`;
+      const idx = items.map((it, i) => ({ it, i }));
+      const sections = [];                                  // dish-name sections first, in insertion order
+      idx.forEach(x => { const sec = x.it.section || null; if (sec && !sections.includes(sec)) sections.push(sec); });
+      const build = pfx => {
+        let h = '';
+        sections.forEach(sec => {
+          const group = idx.filter(x => x.it.section === sec);   // checked items stay in place
+          if (!group.length) return;
+          const cnt = Math.max(...group.map(x => x.it.sectionCount || 1));
+          h += `<div style="display:flex;align-items:center;gap:6px;margin:10px 0 2px">
+            <span style="color:var(--hdone);font-size:11px;text-transform:uppercase;letter-spacing:0.5px">${esc(sec)}</span>
+            <span style="display:inline-flex;align-items:center;gap:3px" title="Meals you're buying for">
+              <button class="btn editbtn" data-seccnt="-1" data-sec="${esc(sec)}" style="font-size:10px;padding:1px 7px"${cnt <= 1 ? ' disabled' : ''}>−</button>
+              <button class="btn editbtn" data-seccnt="1" data-sec="${esc(sec)}" style="font-size:10px;padding:1px 7px">+</button>
+            </span>
+            <button class="btn editbtn" data-secdel="${esc(sec)}" style="font-size:10px;padding:1px 8px" title="Remove this dish and all its ingredients">✕</button>
+            ${cnt > 1 ? `<span style="margin-left:auto;color:var(--ink-2);font-size:11px;font-variant-numeric:tabular-nums" title="meals">×${cnt}</span>` : ''}</div>`;
+          h += group.map(x => row(x, pfx)).join('');
+        });
+        const gen = idx.filter(x => !x.it.section);              // checked items stay in place
+        if (gen.length) {
+          if (sections.length) h += `<div style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin:10px 0 2px">General</div>`;
+          h += gen.map(x => row(x, pfx)).join('');
+        }
+        return h || '<div style="color:var(--muted);font-size:12.5px;padding:4px 0 2px">List is empty — add an item below.</div>';
+      };
+      dash.innerHTML = build('sd');
+      const page = document.getElementById('shop-page-list');
+      if (page) page.innerHTML = build('sp');
+      const open = items.filter(it => !it.checked).length;
+      const meta = open ? `${open} to buy` : (items.length ? 'all bought' : '');
+      const m1 = document.getElementById('shop-meta'); if (m1) m1.textContent = meta;
+      const m2 = document.getElementById('shop-meta-page'); if (m2) m2.textContent = meta;
+      const spv = document.getElementById('strip-shop');
+      if (spv) {
+        spv.textContent = String(open);
+        const sps = document.getElementById('strip-shop-sub');
+        if (sps) sps.textContent = open ? 'items to buy' : (items.length ? 'all bought' : 'list is empty');
+      }
+      Store.set('shoppingLive', items);
+    }
+    function wire(containerId, inputId, btnId) {
+      const c = document.getElementById(containerId);
+      if (!c) return;
+      c.addEventListener('change', e => {
+        const cb = e.target.closest('input[data-si]');
+        if (!cb) return;
+        const it = items[+cb.dataset.si];
+        it.checked = cb.checked;
+        it.checkedIso = cb.checked ? tIso() : null;
+        render();
+      });
+      c.addEventListener('click', e => {
+        const del = e.target.closest('[data-sdel]');
+        if (del) { items.splice(+del.dataset.sdel, 1); render(); return; }
+        const sdel = e.target.closest('[data-secdel]');
+        if (sdel) { items = items.filter(it => it.section !== sdel.dataset.secdel); render(); return; }
+        const scnt = e.target.closest('[data-seccnt]');
+        if (scnt) {
+          const sec = scnt.dataset.sec, delta = +scnt.dataset.seccnt;
+          const group = items.filter(it => it.section === sec);
+          if (!group.length) return;
+          const next = Math.max(1, Math.max(...group.map(it => it.sectionCount || 1)) + delta);
+          group.forEach(it => { it.sectionCount = next; });
+          render();
+        }
+      });
+      const btn = document.getElementById(btnId), inp = document.getElementById(inputId);
+      if (btn && inp) {
+        btn.addEventListener('click', () => {
+          const t = inp.value.trim();
+          if (!t) return;
+          items.push({ text: t, checked: false, addedIso: tIso() });
+          inp.value = '';
+          render();
+        });
+        inp.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
+      }
+    }
+    wire('shop-dash-list', 'shop-input', 'shop-add');
+    wire('shop-page-list', 'shop-page-input', 'shop-page-add');
+    // TEMP demo hooks
+    window.LifeOS = window.LifeOS || {};
+    window.LifeOS.demoShopping = () => {
+      ['Chicken breast (3 lb)', 'Eggs (2 dozen)', 'Paper towels', 'Coffee beans'].forEach(t => {
+        if (!items.some(x => x.text === t)) items.push({ text: t, checked: false, addedIso: tIso(), demo: true });
+      });
+      render();
+    };
+    window.LifeOS.hasDemoShopping = () => items.some(it => it.demo);
+    window.LifeOS.wipeDemoShopping = () => { items = items.filter(it => !it.demo); render(); };
+    window.LifeOS.wipeAllShopping = () => { items = []; render(); };
+    // explicit cross-module writers (used by Diet: cook-list Active + planner push + dish one-offs)
+    window.LifeOS.shopAdd = list => {
+      list.forEach(n => {
+        const dup = items.find(it => !it.checked && it.text.toLowerCase() === n.text.toLowerCase());
+        if (dup) {                                          // duplicate ingredients merge (skip re-add)
+          if (dup.section === n.section && n.sectionCount) dup.sectionCount = n.sectionCount;
+          return;
+        }
+        const inherit = n.section ? Math.max(1, ...items.filter(it => it.section === n.section).map(it => it.sectionCount || 1)) : 1;
+        items.push({ text: n.text, checked: false, addedIso: tIso(), section: n.section, srcKey: n.srcKey, demo: !!n.demo, sectionCount: n.sectionCount || inherit });
+      });
+      render();
+    };
+    window.LifeOS.shopRemoveUnchecked = srcKey => {
+      items = items.filter(it => !(it.srcKey === srcKey && !it.checked));
+      render();
+    };
+    window.LifeOS.shopBumpSection = sec => {          // pushing a dish that's already on the list = one more meal
+      const live = items.filter(it => it.section === sec && !it.checked);
+      if (!live.length) return false;                 // fully bought (or absent) -> treat as a fresh push instead
+      const next = Math.max(...items.filter(it => it.section === sec).map(it => it.sectionCount || 1)) + 1;
+      items.filter(it => it.section === sec).forEach(it => { it.sectionCount = next; });
+      render();
+      return true;
+    };
+    Store.ready.then(() => {
+      const saved = Store.get('shoppingLive');
+      if (Array.isArray(saved)) items = saved;
+      render();
+    });
+  })();
+  // ================= DIET — one page: today · planner · dishes · cook list · targets (store: dietLive) =================
+  (function () {
+    const body = document.getElementById('diet-body');
+    const libBody = document.getElementById('library-body');   // Library tab mount (falls back into diet page if absent)
+    const onBoth = (ev, fn) => { body.addEventListener(ev, fn); if (libBody) libBody.addEventListener(ev, fn); };
+    if (!body) return;
+    const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+    const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+    const weekStart = d => addDays(d, -d.getDay());
+    const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const MON3 = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    let state = { dishes: [], cook: [], plan: {} };        // plan[iso] = [{id, slot, dishId, demo?}]
+    let seq = 1;
+    const newId = pfx => pfx + Date.now().toString(36) + (seq++);
+    let viewDay = iso(new Date());
+    let weekOff = 0;
+    let dishForm = null;                                   // {mode:'new'|'edit'|'graduate', id?, cookId?}
+    let cookForm = false;
+    let shopSelect = false;
+    let shopDays = new Set();
+    let flashMsg = '';
+    let dragCard = null;                                   // {kind:'cook'|'dish'|'railcook', id}
+    let dayPlan = null, dpSel = 'Breakfast', dpExtra = [], dpCustomFor = null, dpSlotAdd = false, dpDrag = null;   // meal-plan builder
+    const dishById = id => state.dishes.find(d => d.id === id);
+    function persist() { Store.set('dietLive', state); }
+
+    // ---- cross-module surface ----
+    window.LifeOS = window.LifeOS || {};
+    window.LifeOS.getDishes = () => state.dishes.map(d => ({ id: d.id, name: d.name, k: d.k, p: d.p, c: d.c, f: d.f }));
+    window.LifeOS.getPlanDay = isoStr => (state.plan[isoStr] || []).map(e => {
+      if (e.dishId) {
+        const d = dishById(e.dishId);
+        return d ? { key: e.id, slot: e.slot, dishId: d.id, name: d.name, k: d.k, p: d.p, c: d.c, f: d.f } : null;
+      }
+      if (e.name) return { key: e.id, slot: e.slot, name: e.name, k: e.k || 0, p: e.p || 0, c: e.c || 0, f: e.f || 0 };
+      return null;
+    }).filter(Boolean);
+    window.LifeOS.swapPlanEntry = (isoStr, key, dishId) => {
+      const e = (state.plan[isoStr] || []).find(x => x.id === key);
+      if (e && dishById(dishId)) { e.dishId = dishId; persist(); render(); }
+    };
+    window.LifeOS.noteDishMade = dishId => {
+      const d = dishById(dishId);
+      if (d) { d.made = (d.made || 0) + 1; d.lastMade = iso(new Date()); persist(); render(); }
+    };
+    window.LifeOS.dietRefresh = () => render();
+
+    // ---- shared bits ----
+    const parseIngs = txt => txt.split('\n').map(s => s.trim()).filter(Boolean);
+    const readSel = el => {
+      if (!el) return '';
+      const v = el.value;
+      if (v !== undefined && v !== null && v !== '') return v;
+      const o = el.querySelector('option[selected]') || el.querySelector('option');
+      return o ? (o.getAttribute('value') !== null ? o.getAttribute('value') : o.textContent) : '';
+    };
+    const macroLine = d => `${Math.round(d.k)} kcal · P ${Math.round(d.p)} · C ${Math.round(d.c)} · F ${Math.round(d.f)}`;
+    function pushToShopping(dishName, ings, srcKey, demo, count) {
+      if (!window.LifeOS.shopAdd || !ings.length) return;
+      // manual pushes (drag, + Shopping, cook activate) with the dish already on the list = +1 meal;
+      // planner pushes pass an explicit count and always set it outright
+      if (count == null && window.LifeOS.shopBumpSection && window.LifeOS.shopBumpSection(dishName)) {
+        window.LifeOS.shopAdd(ings.map(t => ({ text: t, section: dishName, srcKey, demo })));  // still merge any missing ingredients
+        return;
+      }
+      window.LifeOS.shopAdd(ings.map(t => ({ text: t, section: dishName, srcKey, demo, sectionCount: count || 1 })));
+    }
+    function setCookStatus(id, status) {
+      const cx = state.cook.find(y => y.id === id);
+      if (!cx || cx.status === status) { render(); return; }
+      cx.status = status;
+      if (status === 'active') pushToShopping(cx.name, cx.ings, 'cook:' + cx.id, !!cx.demo);
+      else if (window.LifeOS.shopRemoveUnchecked) window.LifeOS.shopRemoveUnchecked('cook:' + cx.id);
+      render();
+    }
+    function dishFormHtml(f) {
+      const d = f.mode === 'edit' ? dishById(f.id) : null;
+      const g = f.mode === 'graduate' ? state.cook.find(c => c.id === f.cookId) : null;
+      return `<div style="background:var(--page);border:1px solid var(--border);border-radius:14px;padding:13px;margin-bottom:12px">
+        <div style="font-size:12px;color:var(--ink-2);font-weight:600;margin-bottom:8px">${f.mode === 'edit' ? 'Edit dish' : f.mode === 'graduate' ? 'Graduate to dish library' : 'New dish'} <span style="color:var(--muted);font-weight:400">· macros manual, calories required</span></div>
+        <input class="hb-input" id="df-name" placeholder="Dish name…" style="width:100%;margin-bottom:8px" value="${esc(d ? d.name : g ? g.name : '')}">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+          <input class="hb-input" id="df-k" type="number" min="1" placeholder="kcal *" style="width:86px" value="${d ? d.k : ''}">
+          <input class="hb-input" id="df-p" type="number" min="0" placeholder="P g" style="width:70px" value="${d ? d.p : ''}">
+          <input class="hb-input" id="df-c" type="number" min="0" placeholder="C g" style="width:70px" value="${d ? d.c : ''}">
+          <input class="hb-input" id="df-f" type="number" min="0" placeholder="F g" style="width:70px" value="${d ? d.f : ''}">
+        </div>
+        <div style="font-size:10.5px;color:var(--muted);margin-bottom:4px">Ingredients — one per line (drives the shopping list):</div>
+        <textarea id="df-ings" rows="4" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:12px;color:var(--ink);font-family:inherit;font-size:13px;padding:9px 12px;resize:vertical">${esc((d ? d.ings : g ? g.ings : []).join('\n'))}</textarea>
+        <input class="hb-input" id="df-link" placeholder="Recipe link (optional)" style="width:100%;margin-top:8px" value="${esc(d ? d.link || '' : g ? g.link || '' : '')}">
+        <div id="df-err" style="display:none;color:var(--warning);font-size:11px;margin-top:8px"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
+          <button class="btn editbtn" data-dfcancel="1">Cancel</button>
+          <button class="btn primary editbtn" data-dfsave="1" style="color:var(--accent-ink)">Save</button>
+        </div></div>`;
+    }
+
+    // ---- section renderers ----
+    function rToday() {
+      const items = window.LifeOS.getFoodDay ? window.LifeOS.getFoodDay(viewDay) : [];
+      const T = window.LifeOS.getTargets ? window.LifeOS.getTargets() : { k: 2400, p: 180, c: 250, f: 70 };
+      const k = Math.round(items.reduce((s, x) => s + x.k, 0));
+      const p = items.reduce((s, x) => s + (x.p || 0), 0), c = items.reduce((s, x) => s + (x.c || 0), 0), f = items.reduce((s, x) => s + (x.f || 0), 0);
+      const isToday = viewDay === iso(new Date());
+      const dt = parse(viewDay);
+      const meter = (name, val, tgt, col) => `<div class="macro" style="flex:1;min-width:120px;margin-bottom:0">
+        <div class="row"><span class="name"><span class="dot" style="background:${col}"></span>${name}</span><span class="nums">${Math.round(val)} / ${tgt} g</span></div>
+        <div class="meter"><div style="width:${Math.min(100, tgt ? val / tgt * 100 : 0)}%;background:${col}"></div></div></div>`;
+      const quick = state.dishes.slice().sort((a, b) => (b.made || 0) - (a.made || 0)).slice(0, 8);
+      return `<div class="card">
+        <h2><span style="display:flex;align-items:center;gap:8px">
+          <button class="btn" data-dayoff="-1" style="font-size:11px;padding:2px 11px">‹</button>
+          <span>${isToday ? 'Today' : DOW[dt.getDay()] + ', ' + MON3[dt.getMonth()] + ' ' + dt.getDate()}</span>
+          <button class="btn" data-dayoff="1" style="font-size:11px;padding:2px 11px"${isToday ? ' disabled' : ''}>›</button>
+          ${isToday ? '' : '<button class="btn" data-daytoday="1" style="font-size:11px;padding:2px 11px">today</button>'}
+        </span><span class="meta">${items.length} entr${items.length === 1 ? 'y' : 'ies'}</span></h2>
+        <div class="kcal-line"><span class="big">${k.toLocaleString()}</span><span class="of">/ ${T.k.toLocaleString()} kcal</span></div>
+        <div class="kcal-sub">${T.k - k >= 0 ? (T.k - k).toLocaleString() + ' kcal remaining' : Math.abs(T.k - k).toLocaleString() + ' kcal over target'}</div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px">
+          ${meter('Protein', p, T.p, 'var(--protein)')}${meter('Carbs', c, T.c, 'var(--carbs)')}${meter('Fat', f, T.f, 'var(--fat)')}
+        </div>
+        ${quick.length ? `<div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:7px">Quick-log a dish</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+          ${quick.map(d => `<button class="btn" data-ql="${d.id}" style="font-size:12px">${esc(d.name)} · ${Math.round(d.k)}</button>`).join('')}
+        </div>` : ''}
+        ${items.length ? items.map((it, idx) =>
+          `<div class="meal-row eaten"><div class="minfo"><span class="mslot">${it.planKey ? 'planned' : 'logged'}</span><span class="mname">${esc(it.name)}</span></div>
+           <span class="mkcal">${Math.round(it.k)} kcal${it.p ? ` · P ${Math.round(it.p)}` : ''}</span>
+           <button class="btn editbtn" data-frm="${idx}" title="Remove">✕</button></div>`).join('')
+          : `<div style="color:var(--muted);font-size:12.5px;padding:4px 0">Nothing logged on this day.</div>`}
+        <div class="addrow" style="flex-wrap:wrap"><input class="hb-input" id="dt-name" placeholder="Log something else… (name)" style="flex:1;min-width:150px">
+          <input class="hb-input" id="dt-k" type="number" min="1" placeholder="kcal *" style="width:82px">
+          <input class="hb-input" id="dt-p" type="number" min="0" placeholder="P" style="width:58px">
+          <input class="hb-input" id="dt-c" type="number" min="0" placeholder="C" style="width:58px">
+          <input class="hb-input" id="dt-f" type="number" min="0" placeholder="F" style="width:58px">
+          <button class="btn" data-dtlog="1">Log</button></div>
+        <div id="dt-err" style="display:none;color:var(--warning);font-size:11px;margin-top:6px">Name and calories are required.</div>
+      </div>`;
+    }
+    function rTargets() {
+      const T = window.LifeOS.getTargets ? window.LifeOS.getTargets() : { k: 2400, p: 180, c: 250, f: 70 };
+      return `<div class="card">
+        <h2>Daily targets <span class="meta">drive every meter</span></h2>
+        <div style="display:flex;flex-direction:column;gap:9px">
+          ${[['Calories', 'tg-k', T.k, 'kcal'], ['Protein', 'tg-p', T.p, 'g'], ['Carbs', 'tg-c', T.c, 'g'], ['Fat', 'tg-f', T.f, 'g']].map(r =>
+            `<div style="display:flex;align-items:center;gap:10px"><span style="width:62px;font-size:13px;color:var(--ink-2)">${r[0]}</span>
+             <input class="hb-input" id="${r[1]}" type="number" min="0" value="${r[2]}" style="width:100px">
+             <span style="font-size:12px;color:var(--muted)">${r[3]}</span></div>`).join('')}
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:14px">
+          <button class="btn primary" data-tgsave="1" style="font-size:12px;padding:6px 16px">Save</button>
+          <span id="tg-ok" style="display:none;font-size:12px;color:var(--good)">✓ saved</span>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:12px">Training vs. rest-day targets are on the roadmap.</div>
+      </div>`;
+    }
+    function rPlanner() {
+      const ws = addDays(weekStart(new Date()), weekOff * 7);
+      const days = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(ws, i));
+      const we = days[6];
+      const T = window.LifeOS.getTargets ? window.LifeOS.getTargets() : { k: 2400, p: 180 };
+      const label = `${MON3[ws.getMonth()]} ${ws.getDate()} – ${ws.getMonth() === we.getMonth() ? '' : MON3[we.getMonth()] + ' '}${we.getDate()}`;
+      let html = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <button class="btn" data-wkoff="-1" style="font-size:11px;padding:2px 11px">‹</button>
+        <span style="color:var(--ink-2);font-weight:600">${label}${weekOff === 0 ? ' · this week' : ''}</span>
+        <button class="btn" data-wkoff="1" style="font-size:11px;padding:2px 11px">›</button>
+        ${weekOff !== 0 ? '<button class="btn" data-wknow="1" style="font-size:11px;padding:2px 11px">this week</button>' : ''}
+        <span style="margin-left:auto;display:flex;gap:8px;align-items:center">
+          <span style="font-size:11.5px;color:var(--muted)" id="plan-hint">${flashMsg || (state.dishes.length ? '' : 'create dishes below — the planner plans dishes')}</span>
+          ${shopSelect ? '<button class="btn" data-shopcancel="1">Cancel</button>' : ''}
+          <button class="btn primary" data-shopmode="1"${state.dishes.length ? '' : ' disabled style="opacity:0.4"'}>${shopSelect ? (shopDays.size ? `Add ${shopDays.size} day${shopDays.size > 1 ? 's' : ''} to shopping list` : 'Select days…') : 'Add to shopping list'}</button>
+        </span></div>`;
+      html += `<div class="planner${shopSelect ? ' selecting' : ''}">` + days.map(d => {
+        const di = iso(d);
+        const entries = state.plan[di] || [];
+        let k = 0, p = 0;
+        if (di < iso(new Date())) {                          // past day: show what was LOGGED, not what was planned
+          const logged = (window.LifeOS && window.LifeOS.getFoodDay) ? window.LifeOS.getFoodDay(di) : [];
+          const lrows = (logged.length ? `<div class="slotname">logged</div>` : '') + logged.map(it => {
+            k += it.k; p += it.p || 0;
+            return `<div class="slotfood" style="display:flex;align-items:center;gap:6px"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(it.name)}</span></div>
+              <div class="slotmac">${Math.round(it.k)}${it.p ? ` · P ${Math.round(it.p)}` : ''}</div>`;
+          }).join('');
+          return `<div class="day${logged.length ? '' : ' empty'}${shopSelect && shopDays.has(di) ? ' picked' : ''}">
+            <div class="dhead">${DOW[d.getDay()]} <span style="font-weight:400;color:var(--muted)">${d.getDate()}</span>
+              <span style="display:flex;gap:4px">
+                <button class="btn editbtn" data-daylog="${di}" style="font-size:9.5px;padding:1px 8px" title="View / edit this day's food log">✎ log</button>
+              </span>
+              <input type="checkbox" data-shopday="${di}"${shopDays.has(di) ? ' checked' : ''}></div>
+            ${lrows}
+            <div class="dfoot">${logged.length ? `${Math.round(k)} · P ${Math.round(p)} <span style="color:var(--muted);font-weight:400">/ ${T.k}</span>` : 'Nothing logged'}</div>
+          </div>`;
+        }
+        const rows = entries.map(e => {
+          const dsh = dishById(e.dishId);
+          const nm = dsh ? dsh.name : e.name;
+          if (!nm) return '';
+          const ek = dsh ? dsh.k : (e.k || 0), ep = dsh ? dsh.p : (e.p || 0);
+          k += ek; p += ep;
+          return `<div class="slotname">${esc(e.slot)}</div>
+            <div class="slotfood" style="display:flex;align-items:center;gap:6px"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(nm)}</span><span data-pdel="${di}:${e.id}" style="cursor:pointer;color:var(--muted);margin-left:auto;flex-shrink:0" title="Remove">✕</span></div>
+            <div class="slotmac">${ek ? `${Math.round(ek)} · P ${Math.round(ep)}` : '<span style="opacity:0.7">no macros</span>'}</div>`;
+        }).join('');
+        return `<div class="day${entries.length ? '' : ' empty'}${shopSelect && shopDays.has(di) ? ' picked' : ''}">
+          <div class="dhead">${DOW[d.getDay()]} <span style="font-weight:400;color:var(--muted)">${d.getDate()}</span>
+            <span style="display:flex;gap:4px">
+              ${di <= iso(new Date()) ? `<button class="btn editbtn" data-daylog="${di}" style="font-size:9.5px;padding:1px 8px" title="View / edit this day's food log">✎ log</button>` : ''}
+              <button class="btn editbtn" data-dayplan="${di}" style="font-size:9.5px;padding:1px 8px" title="Open the meal-plan builder for this day">✎ plan</button>
+            </span>
+            <input type="checkbox" data-shopday="${di}"${shopDays.has(di) ? ' checked' : ''}></div>
+          ${rows}
+          <div class="dfoot">${entries.length ? `${Math.round(k)} · P ${Math.round(p)} <span style="color:var(--muted);font-weight:400">/ ${T.k}</span>` : 'Nothing planned'}</div>
+        </div>`;
+      }).join('') + `</div>
+      <div style="font-size:11.5px;color:var(--muted);margin-top:8px">Today's planned meals appear on the dashboard with Log / portion / swap controls.</div>`;
+      return html;
+    }
+    function rDishesCard() {
+      return `<div class="card">
+        <h2><span style="display:flex;align-items:center;gap:8px">Dishes <button class="btn plusbtn" data-newdish="1" title="New dish">+</button></span>
+          <span class="meta">known meals · feed the planner & quick-log</span></h2>
+        ${dishForm && dishForm.mode !== 'graduate' ? dishFormHtml(dishForm) : ''}
+        ${state.dishes.length ? state.dishes.map(d =>
+          `<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:12px;margin-bottom:9px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline"><b style="font-size:13.5px">${esc(d.name)}</b>
+              ${d.made ? `<span class="chip">made ${d.made}×</span>` : ''}</div>
+            <div style="color:var(--muted);font-size:11.5px;margin:5px 0 3px">${macroLine(d)}</div>
+            <div style="color:var(--muted);font-size:11.5px">${d.ings.length} ingredient${d.ings.length === 1 ? '' : 's'}${d.link ? ` · <a href="${esc(d.link)}" target="_blank" style="color:var(--ink-2)">recipe ↗</a>` : ''}</div>
+            <div style="display:flex;gap:5px;margin-top:9px;flex-wrap:wrap">
+              <button class="btn editbtn" data-dlog="${d.id}">Log today</button>
+              <button class="btn editbtn" data-dshop="${d.id}"${d.ings.length ? '' : ' disabled style="opacity:0.4"'}>+ Shopping</button>
+              <button class="btn editbtn" data-dedit="${d.id}">Edit</button>
+              <button class="btn editbtn" data-ddel="${d.id}">✕</button>
+            </div></div>`).join('')
+          : '<div style="color:var(--muted);font-size:12.5px">Empty — a dish is a meal you know: macros entered once, logged forever.</div>'}
+      </div>`;
+    }
+    function rCookCard() {
+      const laneCards = status => state.cook.filter(x => x.status === status).map(x =>
+        `<div draggable="true" data-cdrag="${x.id}" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:8px;cursor:grab">
+          <b style="font-size:13px">${esc(x.name)}</b><br>
+          <span style="color:var(--muted);font-size:11px">${x.ings.length} ingredient${x.ings.length === 1 ? '' : 's'}${x.link ? ` · <a href="${esc(x.link)}" target="_blank" style="color:var(--ink-2)">recipe ↗</a>` : ''}</span>
+          ${status === 'active' ? '<br><span style="color:var(--good);font-size:11px">✓ ingredients on shopping list</span>' : ''}
+          <div style="display:flex;gap:4px;margin-top:7px;flex-wrap:wrap">
+            ${status === 'wish' ? `<button class="btn editbtn" data-cact="${x.id}" style="font-size:10.5px;padding:3px 9px">Activate ▸</button>`
+                                : `<button class="btn editbtn" data-cdeact="${x.id}" style="font-size:10.5px;padding:3px 9px">◂ Wishlist</button>`}
+            <button class="btn editbtn" data-cgrad="${x.id}" style="font-size:10.5px;padding:3px 9px">Graduate…</button>
+            <button class="btn editbtn" data-cdel="${x.id}" style="font-size:10.5px;padding:3px 9px">✕</button>
+          </div></div>`).join('');
+      return `<div class="card">
+        <h2><span style="display:flex;align-items:center;gap:8px">Cook list <button class="btn plusbtn" data-newcook="1" title="Add to cook list">+</button></span>
+          <span class="meta">drag cards between lanes</span></h2>
+        ${dishForm && dishForm.mode === 'graduate' ? dishFormHtml(dishForm) : ''}
+        ${cookForm ? `<div style="background:var(--page);border:1px solid var(--border);border-radius:14px;padding:13px;margin-bottom:12px">
+          <input class="hb-input" id="cf-name" placeholder="Dish to learn…" style="width:100%;margin-bottom:8px">
+          <div style="font-size:10.5px;color:var(--muted);margin-bottom:4px">Ingredients — one per line:</div>
+          <textarea id="cf-ings" rows="3" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:12px;color:var(--ink);font-family:inherit;font-size:13px;padding:9px 12px;resize:vertical"></textarea>
+          <input class="hb-input" id="cf-link" placeholder="Recipe link (optional)" style="width:100%;margin-top:8px">
+          <div id="cf-err" style="display:none;color:var(--warning);font-size:11px;margin-top:8px">Give it a name.</div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
+            <button class="btn editbtn" data-cfcancel="1">Cancel</button>
+            <button class="btn primary editbtn" data-cfsave="1" style="color:var(--accent-ink)">Save</button>
+          </div></div>` : ''}
+        <div class="lanes" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="lane" data-lane="wish">
+            <div style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:9px">Wishlist</div>
+            ${laneCards('wish') || '<div style="color:var(--muted);font-size:11.5px">Drop here to deactivate.</div>'}
+          </div>
+          <div class="lane" data-lane="active" style="border-color:var(--hdone)">
+            <div style="color:var(--hdone);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:9px">Active — making soon</div>
+            ${laneCards('active') || '<div style="color:var(--muted);font-size:11.5px">Drag a dish here → its ingredients hit the shopping list.</div>'}
+          </div>
+        </div>
+      </div>`;
+    }
+    // ---- day meal-plan builder (popup) ----
+    const dpEl = document.createElement('div');
+    dpEl.id = 'dayplan-pop';
+    dpEl.style.cssText = 'position:fixed;inset:0;z-index:70;display:none;background:rgba(4,7,11,0.62);overflow:auto;padding:4vh 14px;';
+    document.body.appendChild(dpEl);
+    function dpSlots() {
+      const base = ['Breakfast', 'Lunch', 'Dinner'];
+      const fromEntries = (state.plan[dayPlan] || []).map(e => e.slot);
+      const seen = new Set(base);
+      const extra = [];
+      [...fromEntries, ...dpExtra].forEach(sl => { if (!seen.has(sl)) { seen.add(sl); extra.push(sl); } });
+      return [...base, ...extra];
+    }
+    function dpAdd(slot, entry) {
+      if (!state.plan[dayPlan]) state.plan[dayPlan] = [];
+      state.plan[dayPlan].push({ id: newId('p'), slot, ...entry });
+      dpCustomFor = null;
+      persist(); render();
+      if (window.LifeOS.dietFoodRefresh) window.LifeOS.dietFoodRefresh();
+    }
+    function renderDayPlan() {
+      if (!dayPlan) { dpEl.style.display = 'none'; return; }
+      const T = window.LifeOS.getTargets ? window.LifeOS.getTargets() : { k: 2400 };
+      const d = parse(dayPlan);
+      const entries = state.plan[dayPlan] || [];
+      const tot = entries.reduce((a, e) => { const dsh = dishById(e.dishId); a.k += dsh ? dsh.k : (e.k || 0); a.p += dsh ? dsh.p : (e.p || 0); return a; }, { k: 0, p: 0 });
+      const slotBox = sl => {
+        const rows = entries.filter(e => e.slot === sl).map(e => {
+          const dsh = dishById(e.dishId);
+          const nm = dsh ? dsh.name : e.name;
+          const ek = dsh ? dsh.k : (e.k || 0);
+          return `<div class="meal-row" style="margin-bottom:6px"><div class="minfo"><span class="mname">${esc(nm)}</span></div>
+            <span class="mkcal">${ek ? Math.round(ek) + ' kcal' : '—'}</span>
+            <button class="btn editbtn" data-dpdel="${e.id}" style="font-size:10.5px;padding:2px 9px">✕</button></div>`;
+        }).join('');
+        const cform = dpCustomFor === sl ? `<div style="background:var(--page);border:1px solid var(--border);border-radius:12px;padding:10px;margin-top:6px">
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <input class="hb-input" id="dpc-name" placeholder="Entry name…" style="flex:1;min-width:130px">
+              <input class="hb-input" id="dpc-k" type="number" min="0" placeholder="kcal" style="width:74px">
+              <input class="hb-input" id="dpc-p" type="number" min="0" placeholder="P" style="width:58px">
+            </div>
+            <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:8px">
+              <button class="btn editbtn" data-dpcustomcancel="1">Cancel</button>
+              <button class="btn primary editbtn" data-dpcustomsave="${esc(sl)}" style="color:var(--accent-ink)">Add</button>
+            </div></div>` : '';
+        return `<div class="lane" data-dpslot="${esc(sl)}" style="min-height:0;margin-bottom:10px;cursor:pointer${dpSel === sl ? ';border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)' : ''}">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${rows ? 8 : 4}px">
+            <span style="color:${dpSel === sl ? 'var(--accent)' : 'var(--muted)'};font-size:11px;text-transform:uppercase;letter-spacing:0.5px">${esc(sl)}${dpSel === sl ? ' · selected' : ''}</span>
+            <button class="btn editbtn" data-dpcustomopen="${esc(sl)}" style="font-size:10px;padding:1px 8px">+ custom</button>
+          </div>
+          ${rows || '<div style="color:var(--muted);font-size:11.5px;padding:2px 0">Drop a dish here — or click this slot, then click a dish.</div>'}${cform}</div>`;
+      };
+      const dishRows = state.dishes.length ? state.dishes.map(x =>
+        `<div class="meal-row" draggable="true" data-dpdish="${x.id}" style="cursor:grab;margin-bottom:6px">
+          <div class="minfo"><span class="mslot">${Math.round(x.k)} kcal · P ${Math.round(x.p)}</span><span class="mname">${esc(x.name)}</span></div>
+          <span class="mkcal">⠿</span></div>`).join('')
+        : '<div style="color:var(--muted);font-size:12px">No dishes yet — create them in the Library.</div>';
+      const cookRows = state.cook.length ? state.cook.map(c =>
+        `<div class="meal-row" draggable="true" data-dpcook="${c.id}" style="cursor:grab;margin-bottom:6px">
+          <div class="minfo"><span class="mslot">${c.status === 'active' ? 'active' : 'wishlist'}</span><span class="mname">${esc(c.name)}</span></div>
+          <span class="mkcal">⠿</span></div>`).join('')
+        : '<div style="color:var(--muted);font-size:12px">Cook list is empty.</div>';
+      dpEl.innerHTML = `<div style="max-width:900px;margin:0 auto;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,0.5)">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+          <b style="font-size:16px">Plan ${DOW[d.getDay()]}, ${MON3[d.getMonth()]} ${d.getDate()}</b>
+          <span style="color:var(--ink-2);font-size:12.5px">${Math.round(tot.k).toLocaleString()} · P ${Math.round(tot.p)} <span style="color:var(--muted)">/ ${T.k.toLocaleString()} kcal target</span></span>
+          <button class="btn primary" data-dpclose="1" style="margin-left:auto">Done</button>
+        </div>
+        <div class="grid" style="grid-template-columns:1.1fr 0.9fr;gap:14px;align-items:start">
+          <div>
+            ${dpSlots().map(slotBox).join('')}
+            ${dpSlotAdd ? `<div style="display:flex;gap:6px;align-items:center">
+                <input class="hb-input" id="dps-name" placeholder="Slot name…" style="flex:1">
+                <button class="btn editbtn" data-dpslotcancel="1">✕</button>
+                <button class="btn primary editbtn" data-dpslotsave="1" style="color:var(--accent-ink)">Add</button></div>`
+              : `<div style="display:flex;gap:6px">
+                <button class="btn editbtn" data-dpsnack="1" style="font-size:11px">+ Snack</button>
+                <button class="btn editbtn" data-dpslotadd="1" style="font-size:11px">+ custom slot</button></div>`}
+          </div>
+          <div>
+            <div class="card" style="padding:14px;margin-bottom:12px">
+              <h2 style="margin-bottom:10px">Dishes <span class="meta">drag · or click to add to the selected slot</span></h2>
+              ${dishRows}
+            </div>
+            <div class="card" style="padding:14px">
+              <h2 style="margin-bottom:10px">Cook list <span class="meta">adds as a name-only entry</span></h2>
+              ${cookRows}
+            </div>
+          </div>
+        </div></div>`;
+      dpEl.style.display = 'block';
+    }
+    dpEl.addEventListener('click', e => {
+      if (e.target === dpEl) { dayPlan = null; renderDayPlan(); return; }
+      const B = a => e.target.closest(`[data-${a}]`);
+      let x;
+      if (B('dpclose')) { dayPlan = null; renderDayPlan(); return; }
+      if (x = B('dpdel')) { state.plan[dayPlan] = (state.plan[dayPlan] || []).filter(en => en.id !== x.dataset.dpdel); persist(); render(); if (window.LifeOS.dietFoodRefresh) window.LifeOS.dietFoodRefresh(); return; }
+      if (x = B('dpcustomopen')) { dpCustomFor = x.dataset.dpcustomopen; renderDayPlan(); return; }
+      if (B('dpcustomcancel')) { dpCustomFor = null; renderDayPlan(); return; }
+      if (x = B('dpcustomsave')) {
+        const nm = (document.getElementById('dpc-name') || { value: '' }).value.trim();
+        if (!nm) return;
+        dpAdd(x.dataset.dpcustomsave, { name: nm,
+          k: parseFloat((document.getElementById('dpc-k') || {}).value) || 0,
+          p: parseFloat((document.getElementById('dpc-p') || {}).value) || 0 });
+        return;
+      }
+      if (x = B('dpdish')) { dpAdd(dpSel, { dishId: x.dataset.dpdish }); return; }
+      if (x = B('dpcook')) { const c = state.cook.find(y => y.id === x.dataset.dpcook); if (c) dpAdd(dpSel, { name: c.name }); return; }
+      if (B('dpsnack')) { const n = dpSlots().filter(sl => /^Snack /.test(sl)).length; const sl = 'Snack ' + (n + 1); dpExtra.push(sl); dpSel = sl; renderDayPlan(); return; }
+      if (B('dpslotadd')) { dpSlotAdd = true; renderDayPlan(); return; }
+      if (B('dpslotcancel')) { dpSlotAdd = false; renderDayPlan(); return; }
+      if (B('dpslotsave')) {
+        const nm = (document.getElementById('dps-name') || { value: '' }).value.trim();
+        if (!nm) return;
+        if (!dpSlots().includes(nm)) dpExtra.push(nm);
+        dpSel = nm; dpSlotAdd = false; renderDayPlan(); return;
+      }
+      if (x = B('dpslot')) { dpSel = x.dataset.dpslot; renderDayPlan(); return; }
+    });
+    dpEl.addEventListener('dragstart', e => {
+      const d = e.target.closest('[data-dpdish]');
+      if (d) { dpDrag = { kind: 'dish', id: d.dataset.dpdish }; if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy'; return; }
+      const c = e.target.closest('[data-dpcook]');
+      if (c) { dpDrag = { kind: 'cook', id: c.dataset.dpcook }; if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy'; }
+    });
+    dpEl.addEventListener('dragover', e => {
+      const sl = e.target.closest('[data-dpslot]');
+      if (sl && dpDrag) { e.preventDefault(); sl.classList.add('lane-hint'); }
+    });
+    dpEl.addEventListener('dragleave', e => {
+      const sl = e.target.closest('[data-dpslot]');
+      if (sl) sl.classList.remove('lane-hint');
+    });
+    dpEl.addEventListener('drop', e => {
+      const sl = e.target.closest('[data-dpslot]');
+      if (!sl || !dpDrag) return;
+      e.preventDefault();
+      sl.classList.remove('lane-hint');
+      const slot = sl.dataset.dpslot;
+      if (dpDrag.kind === 'dish') dpAdd(slot, { dishId: dpDrag.id });
+      else { const c = state.cook.find(y => y.id === dpDrag.id); if (c) dpAdd(slot, { name: c.name }); }
+      dpSel = slot; dpDrag = null;
+    });
+    dpEl.addEventListener('dragend', () => { dpDrag = null; });
+
+    function render() {
+      body.innerHTML =
+        `${rPlanner()}` +
+        (libBody ? '' : `<div class="grid" style="margin-top:20px;align-items:start">
+           <div class="col">${rDishesCard()}</div>
+           <div class="col">${rCookCard()}</div>
+         </div>`);
+      if (libBody) libBody.innerHTML =
+        `<div class="grid" style="align-items:start">
+           <div class="col">${rDishesCard()}</div>
+           <div class="col">${rCookCard()}</div>
+         </div>`;
+      renderShopRail();
+      renderDayPlan();
+      persist();
+    }
+
+    // ---- shopping page rail: drag dishes / cook entries onto the list ----
+    function renderShopRail() {
+      const rail = document.getElementById('shop-rail');
+      if (!rail) return;
+      rail.innerHTML = `
+        <div class="card">
+          <h2>Dishes <span class="meta">drag onto the list → ingredients load</span></h2>
+          ${state.dishes.filter(d => d.ings.length).length ? state.dishes.filter(d => d.ings.length).map(d =>
+            `<div class="meal-row" draggable="true" data-raildish="${d.id}" style="cursor:grab">
+              <div class="minfo"><span class="mslot">${d.ings.length} ingredient${d.ings.length === 1 ? '' : 's'}</span><span class="mname">${esc(d.name)}</span></div>
+              <button class="btn editbtn" data-railadd-dish="${d.id}" style="font-size:10.5px;padding:3px 10px" title="Add ingredients to the shopping list">+ cart</button>
+              <span class="mkcal">⠿</span></div>`).join('')
+            : '<div style="color:var(--muted);font-size:12px">No dishes with ingredients yet — create them in the Library.</div>'}
+        </div>
+        <div class="card">
+          <h2>Cook list <span class="meta">drag → loads ingredients + marks Active</span></h2>
+          ${state.cook.length ? state.cook.map(c =>
+            `<div class="meal-row${c.status === 'active' ? ' eaten' : ''}" draggable="true" data-railcook="${c.id}" style="cursor:grab">
+              <div class="minfo"><span class="mslot">${c.status === 'active' ? 'active' : 'wishlist'} · ${c.ings.length} ing.</span><span class="mname">${esc(c.name)}</span></div>
+              <button class="btn editbtn" data-railadd-cook="${c.id}" style="font-size:10.5px;padding:3px 10px" title="Add ingredients to the list · marks it Active">+ cart</button>
+              <span class="mkcal">⠿</span></div>`).join('')
+            : '<div style="color:var(--muted);font-size:12px">Cook list is empty.</div>'}
+        </div>`;
+    }
+    const rail = document.getElementById('shop-rail');
+    const dropCard = document.getElementById('shop-drop-card');
+    if (rail && dropCard) {
+      rail.addEventListener('click', e => {
+        const db = e.target.closest('[data-railadd-dish]');
+        if (db) {
+          const d = dishById(db.dataset.railaddDish);
+          if (d) pushToShopping(d.name, d.ings, 'dish:' + d.id, false);
+          return;
+        }
+        const cb = e.target.closest('[data-railadd-cook]');
+        if (cb) {
+          const cx = state.cook.find(y => y.id === cb.dataset.railaddCook);
+          if (cx) {
+            if (cx.status !== 'active') cx.status = 'active';       // + cart also activates, like dropping
+            pushToShopping(cx.name, cx.ings, 'cook:' + cx.id, !!cx.demo);
+            render();
+          }
+        }
+      });
+      rail.addEventListener('dragstart', e => {
+        const d = e.target.closest('[data-raildish]');
+        if (d) { dragCard = { kind: 'dish', id: d.dataset.raildish }; if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy'; return; }
+        const c = e.target.closest('[data-railcook]');
+        if (c) { dragCard = { kind: 'railcook', id: c.dataset.railcook }; if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy'; }
+      });
+      rail.addEventListener('dragend', () => { dragCard = null; dropCard.classList.remove('lane-hint'); });
+      dropCard.addEventListener('dragover', e => {
+        if (dragCard && (dragCard.kind === 'dish' || dragCard.kind === 'railcook')) { e.preventDefault(); dropCard.classList.add('lane-hint'); }
+      });
+      dropCard.addEventListener('dragleave', () => dropCard.classList.remove('lane-hint'));
+      dropCard.addEventListener('drop', e => {
+        e.preventDefault();
+        dropCard.classList.remove('lane-hint');
+        if (!dragCard) return;
+        if (dragCard.kind === 'dish') {
+          const d = dishById(dragCard.id);
+          if (d) pushToShopping(d.name, d.ings, 'dish:' + d.id, false);
+        } else if (dragCard.kind === 'railcook') {
+          const cx = state.cook.find(y => y.id === dragCard.id);
+          if (cx) {
+            if (cx.status !== 'active') cx.status = 'active';            // dragging a cook dish also activates it
+            pushToShopping(cx.name, cx.ings, 'cook:' + cx.id, !!cx.demo);
+            render();
+          }
+        }
+        dragCard = null;
+      });
+    }
+
+    // ---- kanban drag between cook lanes ----
+    onBoth('dragstart', e => {
+      const c = e.target.closest('[data-cdrag]');
+      if (c) { dragCard = { kind: 'cook', id: c.dataset.cdrag }; if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; }
+    });
+    onBoth('dragover', e => {
+      const lane = e.target.closest('[data-lane]');
+      if (lane && dragCard && dragCard.kind === 'cook') {
+        e.preventDefault();
+        body.querySelectorAll('.lane').forEach(l => l.classList.remove('lane-hint'));
+        lane.classList.add('lane-hint');
+      }
+    });
+    onBoth('drop', e => {
+      const lane = e.target.closest('[data-lane]');
+      if (lane && dragCard && dragCard.kind === 'cook') {
+        e.preventDefault();
+        setCookStatus(dragCard.id, lane.dataset.lane);
+      }
+      dragCard = null;
+    });
+    onBoth('dragend', () => {
+      dragCard = null;
+      body.querySelectorAll('.lane-hint').forEach(l => l.classList.remove('lane-hint'));
+    });
+
+    // ---- events (single delegation) ----
+    onBoth('click', e => {
+      const t = e.target;
+      const A = a => t.closest(`[data-${a}]`);
+      let x;
+      if (shopSelect) {                                     // selecting days: the whole day cell is the click target
+        const dayEl = t.closest('.planner .day');
+        if (dayEl) {
+          if (!t.closest('input[type=checkbox]')) {
+            const cb = dayEl.querySelector('[data-shopday]');
+            if (cb) {
+              const di = cb.dataset.shopday;
+              shopDays.has(di) ? shopDays.delete(di) : shopDays.add(di);
+              render();
+            }
+          }
+          return;                                           // day actions pause while selecting
+        }
+      }
+      if (x = A('dayoff')) { viewDay = iso(addDays(parse(viewDay), +x.dataset.dayoff)); render(); return; }
+      if (x = A('daytoday')) { viewDay = iso(new Date()); render(); return; }
+      if (x = A('ql')) {
+        const d = dishById(x.dataset.ql);
+        if (d) { window.LifeOS.logFood(viewDay, { name: d.name, k: d.k, p: d.p, c: d.c, f: d.f, dishId: d.id }); window.LifeOS.noteDishMade(d.id); }
+        return;
+      }
+      if (x = A('frm')) { window.LifeOS.removeFoodAt(viewDay, +x.dataset.frm); render(); return; }
+      if (x = A('dtlog')) {
+        const name = document.getElementById('dt-name').value.trim();
+        const k = parseFloat(document.getElementById('dt-k').value);
+        if (!name || !k || k <= 0) { document.getElementById('dt-err').style.display = 'block'; return; }
+        window.LifeOS.logFood(viewDay, { name, k,
+          p: parseFloat(document.getElementById('dt-p').value) || 0,
+          c: parseFloat(document.getElementById('dt-c').value) || 0,
+          f: parseFloat(document.getElementById('dt-f').value) || 0 });
+        render(); return;
+      }
+      if (x = A('newdish')) { dishForm = { mode: 'new' }; render(); return; }
+      if (x = A('dedit')) { dishForm = { mode: 'edit', id: x.dataset.dedit }; render(); return; }
+      if (x = A('ddel')) { state.dishes = state.dishes.filter(d => d.id !== x.dataset.ddel); render(); return; }
+      if (x = A('dlog')) {
+        const d = dishById(x.dataset.dlog);
+        if (d) { window.LifeOS.logFood(iso(new Date()), { name: d.name, k: d.k, p: d.p, c: d.c, f: d.f, dishId: d.id }); window.LifeOS.noteDishMade(d.id); }
+        return;
+      }
+      if (x = A('dshop')) {
+        const d = dishById(x.dataset.dshop);
+        if (d) pushToShopping(d.name, d.ings, 'dish:' + d.id, false);
+        return;
+      }
+      if (x = A('dfcancel')) { dishForm = null; render(); return; }
+      if (x = A('dfsave')) {
+        const name = document.getElementById('df-name').value.trim();
+        const k = parseFloat(document.getElementById('df-k').value);
+        if (!name || !k || k <= 0) {
+          const er = document.getElementById('df-err');
+          er.textContent = 'Name and calories are required.'; er.style.display = 'block';
+          return;
+        }
+        const vals = {
+          name, k,
+          p: parseFloat(document.getElementById('df-p').value) || 0,
+          c: parseFloat(document.getElementById('df-c').value) || 0,
+          f: parseFloat(document.getElementById('df-f').value) || 0,
+          ings: parseIngs(document.getElementById('df-ings').value),
+          link: document.getElementById('df-link').value.trim()
+        };
+        if (dishForm.mode === 'edit') Object.assign(dishById(dishForm.id), vals);
+        else {
+          state.dishes.push({ id: newId('d'), made: 0, ...vals });
+          if (dishForm.mode === 'graduate') {
+            const ci = state.cook.findIndex(cx => cx.id === dishForm.cookId);
+            if (ci >= 0) {
+              if (state.cook[ci].status === 'active' && window.LifeOS.shopRemoveUnchecked)
+                window.LifeOS.shopRemoveUnchecked('cook:' + state.cook[ci].id);
+              state.cook.splice(ci, 1);
+            }
+          }
+        }
+        dishForm = null; render(); return;
+      }
+      if (x = A('newcook')) { cookForm = true; render(); const cf = document.getElementById('cf-name'); if (cf) cf.focus(); return; }
+      if (x = A('cfcancel')) { cookForm = false; render(); return; }
+      if (x = A('cfsave')) {
+        const name = document.getElementById('cf-name').value.trim();
+        if (!name) { document.getElementById('cf-err').style.display = 'block'; return; }
+        state.cook.push({ id: newId('c'), name, status: 'wish',
+          ings: parseIngs(document.getElementById('cf-ings').value),
+          link: document.getElementById('cf-link').value.trim() });
+        cookForm = false; render(); return;
+      }
+      if (x = A('cact')) { setCookStatus(x.dataset.cact, 'active'); return; }
+      if (x = A('cdeact')) { setCookStatus(x.dataset.cdeact, 'wish'); return; }
+      if (x = A('cgrad')) { dishForm = { mode: 'graduate', cookId: x.dataset.cgrad }; render(); return; }
+      if (x = A('cdel')) {
+        const cxx = state.cook.find(y => y.id === x.dataset.cdel);
+        if (cxx && cxx.status === 'active' && window.LifeOS.shopRemoveUnchecked) window.LifeOS.shopRemoveUnchecked('cook:' + cxx.id);
+        state.cook = state.cook.filter(y => y.id !== x.dataset.cdel);
+        render(); return;
+      }
+      if (x = A('wkoff')) { weekOff += +x.dataset.wkoff; render(); return; }
+      if (x = A('wknow')) { weekOff = 0; render(); return; }
+      if (x = A('daylog')) { if (window.LifeOS.editFoodDay) window.LifeOS.editFoodDay(x.dataset.daylog); return; }
+      if (x = A('dayplan')) { dayPlan = x.dataset.dayplan; dpSel = 'Breakfast'; dpExtra = []; dpCustomFor = null; dpSlotAdd = false; renderDayPlan(); return; }
+      if (x = A('pdel')) {
+        const [di, id] = x.dataset.pdel.split(':');
+        if (state.plan[di]) state.plan[di] = state.plan[di].filter(en => en.id !== id);
+        render();
+        if (window.LifeOS.dietFoodRefresh) window.LifeOS.dietFoodRefresh();
+        return;
+      }
+      if (x = A('shopmode')) {
+        if (!shopSelect) { shopSelect = true; shopDays.clear(); flashMsg = 'Pick days, then confirm.'; render(); }
+        else if (shopDays.size) {
+          const byDish = {};
+          shopDays.forEach(di => (state.plan[di] || []).forEach(en => {
+            const d = dishById(en.dishId);
+            if (d && d.ings.length) {
+              if (!byDish[d.name]) byDish[d.name] = { ings: d.ings, n: 0 };
+              byDish[d.name].n++;                            // same dish planned N times -> "×N" on its section
+            }
+          }));
+          Object.keys(byDish).forEach(name => pushToShopping(name, byDish[name].ings, 'plan', false, byDish[name].n));
+          flashMsg = `✓ Ingredients from ${shopDays.size} day(s) sent to the shopping list.`;
+          shopSelect = false; shopDays.clear(); render();
+        }
+        return;
+      }
+      if (x = A('shopcancel')) { shopSelect = false; shopDays.clear(); flashMsg = ''; render(); return; }
+      if (x = A('tgsave')) {
+        const k = parseFloat(document.getElementById('tg-k').value);
+        if (!k || k <= 0) return;
+        window.LifeOS.setTargets({ k,
+          p: parseFloat(document.getElementById('tg-p').value) || 0,
+          c: parseFloat(document.getElementById('tg-c').value) || 0,
+          f: parseFloat(document.getElementById('tg-f').value) || 0 });
+        const ok = document.getElementById('tg-ok');
+        if (ok) { ok.style.display = 'inline'; setTimeout(() => ok.style.display = 'none', 2500); }
+        return;
+      }
+    });
+    onBoth('change', e => {
+      const sd = e.target.closest('[data-shopday]');
+      if (sd) { sd.checked ? shopDays.add(sd.dataset.shopday) : shopDays.delete(sd.dataset.shopday); render(); }
+    });
+
+    // ---- TEMP demo hooks ----
+    window.LifeOS.demoDiet = () => {
+      if (!state.dishes.length) {
+        [['Chicken rice bowl', 720, 58, 82, 16, ['Chicken breast (2 lb)', 'Jasmine rice', 'Broccoli', 'Soy sauce'], 14],
+         ['Eggs + oats', 520, 38, 52, 18, ['Eggs (dozen)', 'Rolled oats', 'Banana'], 22],
+         ['Turkey chili', 480, 44, 38, 14, ['Ground turkey (2 lb)', 'Kidney beans', 'Crushed tomatoes', 'Chili spices'], 6],
+         ['Protein shake', 180, 30, 8, 3, ['Whey protein'], 30]
+        ].forEach(r => state.dishes.push({ id: newId('d'), name: r[0], k: r[1], p: r[2], c: r[3], f: r[4], ings: r[5], made: r[6], link: '', demo: true }));
+      }
+      if (!state.cook.length) {
+        state.cook.push({ id: newId('c'), name: 'Birria tacos', status: 'wish', ings: ['Beef chuck (3 lb)', 'Guajillo chiles', 'Corn tortillas', 'Oaxaca cheese'], link: '', demo: true });
+        state.cook.push({ id: newId('c'), name: 'Sourdough bread', status: 'wish', ings: ['Bread flour', 'Sourdough starter'], link: '', demo: true });
+      }
+      const today = new Date();
+      for (let o = 0; o <= 2; o++) {
+        const di = iso(addDays(today, o));
+        if ((state.plan[di] || []).length) continue;
+        state.plan[di] = [
+          { id: newId('p'), slot: 'Breakfast', dishId: state.dishes[1].id, demo: true },
+          { id: newId('p'), slot: 'Lunch', dishId: state.dishes[0].id, demo: true },
+          { id: newId('p'), slot: 'Dinner', dishId: state.dishes[2].id, demo: true }
+        ];
+      }
+      render();
+      if (window.LifeOS.dietFoodRefresh) window.LifeOS.dietFoodRefresh();
+    };
+    window.LifeOS.hasDemoDiet = () => state.dishes.some(d => d.demo) || state.cook.some(c => c.demo) ||
+      Object.values(state.plan).some(arr => arr.some(e => e.demo));
+    window.LifeOS.wipeDemoDiet = () => {
+      state.dishes = state.dishes.filter(d => !d.demo);
+      state.cook = state.cook.filter(c => !c.demo);
+      for (const k of Object.keys(state.plan)) {
+        state.plan[k] = state.plan[k].filter(e => !e.demo);
+        if (!state.plan[k].length) delete state.plan[k];
+      }
+      render();
+      if (window.LifeOS.dietFoodRefresh) window.LifeOS.dietFoodRefresh();
+    };
+    window.LifeOS.wipeAllDiet = () => {
+      state = { dishes: [], cook: [], plan: {} };
+      render();
+      if (window.LifeOS.dietFoodRefresh) window.LifeOS.dietFoodRefresh();
+    };
+
+    Store.ready.then(() => {
+      const saved = Store.get('dietLive');
+      if (saved && saved.dishes) state = saved;
+      render();
+      if (window.LifeOS.dietFoodRefresh) window.LifeOS.dietFoodRefresh();   // dashboard shows planned meals
+      setInterval(render, 60000);
+    });
+  })();
+</script>
+</body>
+</html>
