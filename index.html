@@ -1250,11 +1250,16 @@
   })();
 
   // ================= PWA — installable app shell, self-updating =================
-  const APP_VER = 'v0.87';
+  const APP_VER = 'v0.88';
   ['app-ver', 'app-ver2'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = APP_VER; });
   try {
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-      navigator.serviceWorker.register('sw.js').then(reg => { try { reg.update(); } catch (e) {} }).catch(() => {});
+      navigator.serviceWorker.register('sw.js').then(reg => {
+        const check = () => { try { reg.update(); } catch (e) {} };
+        check();
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });   // installed apps resume, not relaunch — check on every foreground
+        setInterval(check, 30 * 60 * 1000);
+      }).catch(() => {});
       // when a new version takes control, reload once so the user is instantly on it
       let swRefreshed = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
