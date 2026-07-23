@@ -2028,7 +2028,8 @@
         if (!dpSlots().includes(nm)) dpExtra.push(nm);
         dpSel = nm; dpSlotAdd = false; renderDayPlan(); return;
       }
-      if (x = B('dpslot')) { dpSel = x.dataset.dpslot; renderDayPlan(); return; }
+      if (e.target.closest('input, textarea, select')) return;             // typing in a form field ≠ selecting the slot
+      if (x = B('dpslot')) { if (dpSel !== x.dataset.dpslot) { dpSel = x.dataset.dpslot; renderDayPlan(); } return; }
     });
     dpEl.addEventListener('dragstart', e => {
       const d = e.target.closest('[data-dpdish]');
