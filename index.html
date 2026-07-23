@@ -535,7 +535,7 @@
     </div>
     <!-- ===== /TEMP ===== -->
     <div class="card" style="max-width:440px;margin-bottom:16px">
-      <h2>Theme <span class="meta">five moods · applies instantly</span></h2>
+      <h2>Theme <span class="meta">six moods · applies instantly</span></h2>
       <div id="theme-row" style="display:flex;gap:8px;flex-wrap:wrap"></div>
     </div>
     <div class="card" style="max-width:440px;margin-bottom:16px">
@@ -1087,6 +1087,9 @@
         font: "ui-monospace, 'Cascadia Mono', 'JetBrains Mono', Menlo, Consolas, monospace",
         bg: 'radial-gradient(1100px 560px at 50% -10%, rgba(46,255,106,0.06), transparent 62%)',
         vars: { '--page': '#040804', '--surface': '#081108', '--surface-2': '#0c1a0c', '--track': '#143214', '--border': 'rgba(51,255,102,0.20)', '--ink': '#bff5c6', '--ink-2': '#79cf8a', '--muted': '#3f7a4c', '--protein': '#4ce07a', '--carbs': '#d9e04c', '--fat': '#35d0c0', '--accent': '#2eff6a', '--accent-ink': '#02120a', '--hdone': '#4ce07a', '--good': '#2eff6a', '--warning': '#d9e04c', '--line': 'rgba(46,255,106,0.40)', '--shadow': '0 0 18px rgba(46,255,106,0.08)' } },
+      cobalt: { label: 'Cobalt', preview: ['#0b0e15', '#4a95f7', '#ffb74d'], colorScheme: 'dark',
+        bg: 'radial-gradient(1100px 560px at 50% -10%, rgba(74,149,247,0.10), transparent 62%)',
+        vars: { '--page': '#0b0e15', '--surface': '#141824', '--surface-2': '#1c2233', '--track': '#262e42', '--border': 'rgba(120,150,200,0.14)', '--ink': '#eef2f8', '--ink-2': '#aeb9cc', '--muted': '#6d7a92', '--protein': '#4a95f7', '--carbs': '#ffb74d', '--fat': '#ef6292', '--accent': '#4a95f7', '--accent-ink': '#ffffff', '--hdone': '#4a95f7', '--good': '#66bb6a', '--warning': '#ffa726', '--line': 'rgba(74,149,247,0.45)', '--shadow': '0 8px 24px rgba(0,0,0,0.45)' } },
       sunset: { label: 'Sunset', preview: ['#1a0e14', '#ff7e5f', '#64a1e8'], colorScheme: 'dark',
         bg: 'radial-gradient(1100px 560px at 88% -8%, rgba(255,126,95,0.14), transparent 62%), radial-gradient(900px 500px at -10% 100%, rgba(122,90,190,0.12), transparent 60%)',
         vars: { '--page': '#1a0e14', '--surface': '#251319', '--surface-2': '#321a20', '--track': '#40222a', '--border': 'rgba(255,126,95,0.16)', '--ink': '#ffeee4', '--ink-2': '#d9ab9e', '--muted': '#9a6f66', '--protein': '#64a1e8', '--carbs': '#ffb646', '--fat': '#ff6f91', '--accent': '#ff7e5f', '--accent-ink': '#2b0d05', '--hdone': '#64a1e8', '--good': '#58c47e', '--warning': '#ffb646', '--line': 'rgba(255,126,95,0.40)', '--shadow': '0 8px 24px rgba(0,0,0,0.40)' } }
@@ -1250,7 +1253,7 @@
   })();
 
   // ================= PWA — installable app shell, self-updating =================
-  const APP_VER = 'v0.89';
+  const APP_VER = 'v0.90';
   ['app-ver', 'app-ver2'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = APP_VER; });
   try {
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
