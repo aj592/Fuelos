@@ -320,7 +320,7 @@
 <body class="booting">
 
 <aside>
-  <div class="logo">Fuel<span>OS</span> <span style="color:var(--muted);font-weight:400;font-size:11px">midnight</span></div>
+  <div class="logo"><img id="logo-img" style="display:none;width:20px;height:20px;border-radius:6px;vertical-align:-4px;margin-right:6px;object-fit:cover" alt="">Fuel<span>OS</span> <span style="color:var(--muted);font-weight:400;font-size:11px">midnight</span></div>
   <button class="nav-item active" data-page="dashboard">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
     Dashboard</button>
@@ -530,6 +530,17 @@
     </div>
     <!-- ===== /TEMP ===== -->
     <div class="card" style="max-width:440px;margin-bottom:16px">
+      <h2>App icon <span class="meta">in-app logo</span></h2>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <img id="icon-preview" style="display:none;width:34px;height:34px;border-radius:9px;object-fit:cover" alt="">
+        <button class="btn" id="icon-upload">Upload image…</button>
+        <button class="btn" id="icon-reset" style="display:none">Reset</button>
+        <input type="file" id="icon-file" accept="image/*" style="display:none">
+        <span id="icon-ok" style="display:none;font-size:11.5px;color:var(--good)"></span>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:10px">Changes the logo inside the app. The phone's home-screen icon is baked into the install itself — send AJ's chosen image into a build and it becomes the launcher icon.</div>
+    </div>
+    <div class="card" style="max-width:440px;margin-bottom:16px">
       <h2>Backup <span class="meta">your data, one file</span></h2>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <button class="btn" id="bk-export">Download backup</button>
@@ -665,6 +676,7 @@
     const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
     let state = { log: {}, targets: { k: 2400, p: 180, c: 250, f: 70 } };
+    let hydrated = false;                                  // guards persist-before-load (cross-module refresh can render early)
     let openEditor = null;                                 // planKey of the row with the portion/swap editor open
     const todayIso = () => iso(new Date());
     function dayArr(dayIso) { if (!state.log[dayIso]) state.log[dayIso] = []; return state.log[dayIso]; }
@@ -753,7 +765,7 @@
         const ps = document.getElementById('strip-plan-sub');
         if (ps) ps.textContent = plan.length ? `meal${plan.length > 1 ? 's' : ''} planned · ${Math.round(pk).toLocaleString()} kcal` : 'nothing planned';
       }
-      Store.set('foodLive', state);
+      if (hydrated) Store.set('foodLive', state);
       if (window.LifeOS && window.LifeOS.dietRefresh) window.LifeOS.dietRefresh('food');
     }
     card.addEventListener('click', e => {
@@ -960,6 +972,7 @@
       const saved = Store.get('foodLive');
       if (saved && saved.log) state = saved;
       if (!state.targets) state.targets = { k: 2400, p: 180, c: 250, f: 70 };
+      hydrated = true;
       render();
       setInterval(render, 60000);                           // midnight: today's card resets, history kept
     });
@@ -1047,6 +1060,49 @@
       pop.style.display = 'none';
     });
     document.addEventListener('click', e => { if (pop.style.display === 'block' && !pop.contains(e.target) && e.target !== btn) pop.style.display = 'none'; });
+  })();
+
+  // ================= APP ICON — user-uploaded in-app logo =================
+  (function () {
+    const up = document.getElementById('icon-upload');
+    if (!up) return;
+    const fi = document.getElementById('icon-file'), rs = document.getElementById('icon-reset');
+    const ok = msg => { const el = document.getElementById('icon-ok'); if (el) { el.textContent = msg; el.style.display = 'inline'; setTimeout(() => el.style.display = 'none', 3000); } };
+    const apply = data => {
+      const pv = document.getElementById('icon-preview'), lg = document.getElementById('logo-img');
+      [pv, lg].forEach(el => { if (el) { el.src = data || ''; el.style.display = data ? '' : 'none'; } });
+      if (rs) rs.style.display = data ? '' : 'none';
+    };
+    up.addEventListener('click', () => fi && fi.click());
+    if (fi) fi.addEventListener('change', () => {
+      const f = fi.files && fi.files[0];
+      if (!f) return;
+      const rd = new FileReader();
+      rd.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const c = document.createElement('canvas');
+            c.width = c.height = 128;
+            const g = c.getContext('2d');
+            const m = Math.min(img.width, img.height);                 // center-crop to square
+            g.drawImage(img, (img.width - m) / 2, (img.height - m) / 2, m, m, 0, 0, 128, 128);
+            const data = c.toDataURL('image/png');
+            Store.ready.then(() => { Store.set('ui', { ...(Store.get('ui') || {}), iconData: data }); });
+            apply(data);
+            ok('✓ saved');
+          } catch (e) { ok('image not supported here'); }
+        };
+        img.src = rd.result;
+      };
+      rd.readAsDataURL(f);
+    });
+    if (rs) rs.addEventListener('click', () => {
+      Store.ready.then(() => { const ui = Store.get('ui') || {}; delete ui.iconData; Store.set('ui', ui); });
+      apply(null);
+      ok('✓ reset');
+    });
+    Store.ready.then(() => { const ui = Store.get('ui') || {}; if (ui.iconData) apply(ui.iconData); });
   })();
 
   // ================= BACKUP — export / import the whole store =================
@@ -1175,6 +1231,7 @@
     const fmt = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     const X0 = 45, X1 = 548, TOP = 14, BOT = 184;
     let state = { entries: {}, goal: null };               // entries[iso] = {w, demo?}
+    let hydrated = false;
     let range = 90;
     let view = null;
     const el = (tag, attrs, text) => {
@@ -1275,7 +1332,7 @@
           ? ((avg7 - prev7 <= 0 ? '▼ ' : '▲ ') + Math.abs(avg7 - prev7).toFixed(1) + ' vs prior week')
           : (cur != null ? 'log more to see trend' : 'no weigh-ins yet');
       }
-      Store.set('weightLive', state);
+      if (hydrated) Store.set('weightLive', state);
     }
     // ---- interactions: crosshair / brush / day panel ----
     const brush = document.getElementById('brush'), readout = document.getElementById('wt-readout');
@@ -1428,6 +1485,7 @@
     Store.ready.then(() => {
       const saved = Store.get('weightLive');
       if (saved && saved.entries) state = saved;
+      hydrated = true;
       render();
       setInterval(render, 60000);
     });
@@ -1440,6 +1498,7 @@
     const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
     const tIso = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
     let items = [];                                        // {text, checked, checkedIso, addedIso, demo?}
+    let hydrated = false;
     function render() {
       const cdt = new Date(); cdt.setDate(cdt.getDate() - 3);
       const cutIso = cdt.getFullYear() + '-' + String(cdt.getMonth() + 1).padStart(2, '0') + '-' + String(cdt.getDate()).padStart(2, '0');
@@ -1487,7 +1546,7 @@
         const sps = document.getElementById('strip-shop-sub');
         if (sps) sps.textContent = open ? 'items to buy' : (items.length ? 'all bought' : 'list is empty');
       }
-      Store.set('shoppingLive', items);
+      if (hydrated) Store.set('shoppingLive', items);
     }
     function wire(containerId, inputId, btnId) {
       const c = document.getElementById(containerId);
@@ -1568,6 +1627,7 @@
     Store.ready.then(() => {
       const saved = Store.get('shoppingLive');
       if (Array.isArray(saved)) items = saved;
+      hydrated = true;
       render();
     });
   })();
@@ -1594,10 +1654,11 @@
     let shopSelect = false;
     let shopDays = new Set();
     let flashMsg = '';
+    let hydrated = false;
     let dragCard = null;                                   // {kind:'cook'|'dish'|'railcook', id}
     let dayPlan = null, dpSel = 'Breakfast', dpExtra = [], dpCustomFor = null, dpSlotAdd = false, dpDrag = null;   // meal-plan builder
     const dishById = id => state.dishes.find(d => d.id === id);
-    function persist() { Store.set('dietLive', state); }
+    function persist() { if (hydrated) Store.set('dietLive', state); }
 
     // ---- cross-module surface ----
     window.LifeOS = window.LifeOS || {};
@@ -2305,6 +2366,7 @@
     Store.ready.then(() => {
       const saved = Store.get('dietLive');
       if (saved && saved.dishes) state = saved;
+      hydrated = true;
       render();
       if (window.LifeOS.dietFoodRefresh) window.LifeOS.dietFoodRefresh();   // dashboard shows planned meals
       setInterval(render, 60000);
