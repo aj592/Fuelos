@@ -265,7 +265,12 @@
   }
   #food-macro-form input::placeholder { color: var(--muted); }
 
-  /* ---------- Weight chart ---------- */
+  /* ---------- Weight chart (theme-aware) ---------- */
+  #wt-line { stroke: var(--protein); }
+  #wt-cross-dot { fill: var(--protein); }
+  .wt-dot { fill: var(--protein); }
+  #wt-fill stop { stop-color: var(--protein); }
+
   .rangebtn { font-size: 12px; padding: 5px 14px; }
   .subtab { font-size: 12.5px; padding: 6px 16px; }
   .lane { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 10px; min-height: 110px; }
@@ -529,6 +534,10 @@
       </div>
     </div>
     <!-- ===== /TEMP ===== -->
+    <div class="card" style="max-width:440px;margin-bottom:16px">
+      <h2>Theme <span class="meta">five moods · applies instantly</span></h2>
+      <div id="theme-row" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+    </div>
     <div class="card" style="max-width:440px;margin-bottom:16px">
       <h2>App icon <span class="meta">in-app logo</span></h2>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
@@ -1062,6 +1071,99 @@
     document.addEventListener('click', e => { if (pop.style.display === 'block' && !pop.contains(e.target) && e.target !== btn) pop.style.display = 'none'; });
   })();
 
+  // ================= THEMES — five moods, all CSS-variable swaps =================
+  (function () {
+    const row = document.getElementById('theme-row');
+    const VARS = ['--page', '--surface', '--surface-2', '--track', '--border', '--ink', '--ink-2', '--muted', '--protein', '--carbs', '--fat', '--accent', '--accent-ink', '--hdone', '--good', '--warning', '--line', '--shadow'];
+    const THEMES = {
+      midnight: { label: 'Midnight', preview: ['#0e1217', '#e3a455', '#4a8fdf'], vars: null },   // stylesheet defaults
+      synthwave: { label: 'Synthwave', preview: ['#120a1f', '#ff4fa3', '#37d0ee'], colorScheme: 'dark',
+        bg: 'radial-gradient(1100px 560px at 88% -8%, rgba(255,79,163,0.12), transparent 62%), radial-gradient(900px 500px at -10% 100%, rgba(55,208,238,0.10), transparent 60%)',
+        vars: { '--page': '#120a1f', '--surface': '#1a1030', '--surface-2': '#241542', '--track': '#2f1d55', '--border': 'rgba(255,79,163,0.18)', '--ink': '#f2e9ff', '--ink-2': '#c0aede', '--muted': '#8a76ad', '--protein': '#37d0ee', '--carbs': '#ffb02e', '--fat': '#ff6fb3', '--accent': '#ff4fa3', '--accent-ink': '#2a0518', '--hdone': '#37d0ee', '--good': '#3ee08a', '--warning': '#ffb02e', '--line': 'rgba(255,79,163,0.40)', '--shadow': '0 8px 26px rgba(255,79,163,0.10)' } },
+      matcha: { label: 'Matcha', preview: ['#edf1e4', '#6f9e4f', '#3f7fc4'], colorScheme: 'light',
+        bg: 'radial-gradient(1100px 560px at 88% -8%, rgba(111,158,79,0.10), transparent 62%), radial-gradient(900px 500px at -10% 100%, rgba(63,127,196,0.07), transparent 60%)',
+        vars: { '--page': '#edf1e4', '--surface': '#fafcf4', '--surface-2': '#e3ead4', '--track': '#d6e0c2', '--border': 'rgba(74,94,50,0.18)', '--ink': '#2c3a24', '--ink-2': '#5c6f4e', '--muted': '#8a997b', '--protein': '#3f7fc4', '--carbs': '#c98a2e', '--fat': '#c9648c', '--accent': '#6f9e4f', '--accent-ink': '#f6fbef', '--hdone': '#3f7fc4', '--good': '#4d8f3f', '--warning': '#b8862c', '--line': 'rgba(74,94,50,0.35)', '--shadow': '0 6px 18px rgba(74,94,50,0.12)' } },
+      terminal: { label: 'Terminal', preview: ['#040804', '#2eff6a', '#4ce07a'], colorScheme: 'dark',
+        font: "ui-monospace, 'Cascadia Mono', 'JetBrains Mono', Menlo, Consolas, monospace",
+        bg: 'radial-gradient(1100px 560px at 50% -10%, rgba(46,255,106,0.06), transparent 62%)',
+        vars: { '--page': '#040804', '--surface': '#081108', '--surface-2': '#0c1a0c', '--track': '#143214', '--border': 'rgba(51,255,102,0.20)', '--ink': '#bff5c6', '--ink-2': '#79cf8a', '--muted': '#3f7a4c', '--protein': '#4ce07a', '--carbs': '#d9e04c', '--fat': '#35d0c0', '--accent': '#2eff6a', '--accent-ink': '#02120a', '--hdone': '#4ce07a', '--good': '#2eff6a', '--warning': '#d9e04c', '--line': 'rgba(46,255,106,0.40)', '--shadow': '0 0 18px rgba(46,255,106,0.08)' } },
+      sunset: { label: 'Sunset', preview: ['#1a0e14', '#ff7e5f', '#64a1e8'], colorScheme: 'dark',
+        bg: 'radial-gradient(1100px 560px at 88% -8%, rgba(255,126,95,0.14), transparent 62%), radial-gradient(900px 500px at -10% 100%, rgba(122,90,190,0.12), transparent 60%)',
+        vars: { '--page': '#1a0e14', '--surface': '#251319', '--surface-2': '#321a20', '--track': '#40222a', '--border': 'rgba(255,126,95,0.16)', '--ink': '#ffeee4', '--ink-2': '#d9ab9e', '--muted': '#9a6f66', '--protein': '#64a1e8', '--carbs': '#ffb646', '--fat': '#ff6f91', '--accent': '#ff7e5f', '--accent-ink': '#2b0d05', '--hdone': '#64a1e8', '--good': '#58c47e', '--warning': '#ffb646', '--line': 'rgba(255,126,95,0.40)', '--shadow': '0 8px 24px rgba(0,0,0,0.40)' } }
+    };
+    let current = 'midnight';
+    function apply(name) {
+      const t = THEMES[name] || THEMES.midnight;
+      current = THEMES[name] ? name : 'midnight';
+      const root = document.documentElement;
+      VARS.forEach(v => root.style.removeProperty(v));
+      document.body.style.backgroundImage = '';
+      document.body.style.fontFamily = '';
+      root.style.colorScheme = '';
+      if (t.vars) {
+        Object.entries(t.vars).forEach(([k, v]) => root.style.setProperty(k, v));
+        if (t.bg) document.body.style.backgroundImage = t.bg;
+        if (t.font) document.body.style.fontFamily = t.font;
+        if (t.colorScheme) root.style.colorScheme = t.colorScheme;
+      }
+      if (row) row.querySelectorAll('[data-theme]').forEach(b => b.classList.toggle('active-theme', b.dataset.theme === current));
+      paint();
+    }
+    function paint() {
+      if (!row) return;
+      row.querySelectorAll('[data-theme]').forEach(b => {
+        const on = b.dataset.theme === current;
+        b.style.borderColor = on ? 'var(--accent)' : 'var(--border)';
+        b.style.boxShadow = on ? '0 0 0 1px var(--accent)' : 'none';
+      });
+    }
+    if (row) {
+      row.innerHTML = Object.entries(THEMES).map(([k, t]) =>
+        `<button class="btn" data-theme="${k}" style="display:flex;align-items:center;gap:7px;padding:7px 13px">
+          <span style="display:inline-flex;gap:3px">${t.preview.map(c => `<i style="width:10px;height:10px;border-radius:50%;background:${c};display:inline-block;border:1px solid rgba(128,128,128,0.35)"></i>`).join('')}</span>
+          ${t.label}</button>`).join('');
+      row.addEventListener('click', e => {
+        const b = e.target.closest('[data-theme]');
+        if (!b) return;
+        apply(b.dataset.theme);
+        Store.ready.then(() => Store.set('ui', { ...(Store.get('ui') || {}), theme: current }));
+      });
+    }
+    window.LifeOS = window.LifeOS || {};
+    window.LifeOS.setTheme = apply;
+    Store.ready.then(() => { const th = (Store.get('ui') || {}).theme; if (th) apply(th); else paint(); });
+  })();
+
+  // ================= SWIPE NAV — flick left/right between tabs on mobile =================
+  (function () {
+    const main = document.querySelector('main');
+    if (!main) return;
+    const ORDER = ['dashboard', 'diet', 'library', 'shopping', 'weight', 'settings'];
+    let sx = null, sy = null;
+    main.addEventListener('touchstart', e => {
+      sx = null;
+      if (window.innerWidth > 900) return;
+      if (e.target.closest('#wt-chart, .lane, [draggable="true"], input, textarea, select')) return;
+      const t = e.touches && e.touches[0];
+      if (t) { sx = t.clientX; sy = t.clientY; }
+    }, { passive: true });
+    main.addEventListener('touchend', e => {
+      if (sx === null || window.innerWidth > 900) return;
+      const t = e.changedTouches && e.changedTouches[0];
+      if (!t) return;
+      const dx = t.clientX - sx, dy = t.clientY - sy;
+      sx = null;
+      if (Math.abs(dx) < 70 || Math.abs(dy) > 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;   // must be a clear horizontal flick
+      const cur = document.querySelector('.page.active');
+      const i = ORDER.indexOf(cur ? cur.id.replace('page-', '') : 'dashboard');
+      if (i === -1) return;
+      const next = dx < 0 ? Math.min(ORDER.length - 1, i + 1) : Math.max(0, i - 1);
+      if (next === i) return;
+      const btn = document.querySelector(`#tabbar .nav-item[data-page="${ORDER[next]}"]`) || document.querySelector(`.nav-item[data-page="${ORDER[next]}"]`);
+      if (btn) btn.click();
+    }, { passive: true });
+  })();
+
   // ================= APP ICON — user-uploaded in-app logo =================
   (function () {
     const up = document.getElementById('icon-upload');
@@ -1148,7 +1250,7 @@
   })();
 
   // ================= PWA — installable app shell, self-updating =================
-  const APP_VER = 'v0.86';
+  const APP_VER = 'v0.87';
   ['app-ver', 'app-ver2'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = APP_VER; });
   try {
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
