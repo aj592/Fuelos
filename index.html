@@ -1250,7 +1250,7 @@
   })();
 
   // ================= PWA — installable app shell, self-updating =================
-  const APP_VER = 'v0.88';
+  const APP_VER = 'v0.89';
   ['app-ver', 'app-ver2'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = APP_VER; });
   try {
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
@@ -1771,6 +1771,7 @@
     let shopDays = new Set();
     let flashMsg = '';
     let hydrated = false;
+    let openDays = new Set();                              // planner day cells: click-to-expand
     let dragCard = null;                                   // {kind:'cook'|'dish'|'railcook', id}
     let dayPlan = null, dpSel = 'Breakfast', dpExtra = [], dpCustomFor = null, dpSlotAdd = false, dpDrag = null;   // meal-plan builder
     const dishById = id => state.dishes.find(d => d.id === id);
@@ -1928,40 +1929,41 @@
         let k = 0, p = 0;
         if (di < iso(new Date())) {                          // past day: show what was LOGGED, not what was planned
           const logged = (window.LifeOS && window.LifeOS.getFoodDay) ? window.LifeOS.getFoodDay(di) : [];
-          const lrows = (logged.length ? `<div class="slotname">logged</div>` : '') + logged.map(it => {
-            k += it.k; p += it.p || 0;
-            return `<div class="slotfood" style="display:flex;align-items:center;gap:6px"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(it.name)}</span></div>
-              <div class="slotmac">${Math.round(it.k)}${it.p ? ` · P ${Math.round(it.p)}` : ''}</div>`;
-          }).join('');
-          return `<div class="day${logged.length ? '' : ' empty'}${shopSelect && shopDays.has(di) ? ' picked' : ''}">
-            <div class="dhead">${DOW[d.getDay()]} <span style="font-weight:400;color:var(--muted)">${d.getDate()}</span>
+          logged.forEach(it => { k += it.k; p += it.p || 0; });
+          const open = openDays.has(di);
+          const lrows = open ? (logged.length ? `<div class="slotname">logged</div>` : '') + logged.map(it =>
+            `<div class="slotfood" style="display:flex;align-items:center;gap:6px"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(it.name)}</span></div>
+              <div class="slotmac">${Math.round(it.k)}${it.p ? ` · P ${Math.round(it.p)}` : ''}</div>`).join('') : '';
+          return `<div class="day${logged.length ? '' : ' empty'}${shopSelect && shopDays.has(di) ? ' picked' : ''}" data-dtoggle="${di}" style="cursor:pointer">
+            <div class="dhead"><span style="color:var(--muted);font-size:9px;width:10px;display:inline-block">${open ? '▾' : '▸'}</span>${DOW[d.getDay()]} <span style="font-weight:400;color:var(--muted)">${d.getDate()}</span>
               <span style="display:flex;gap:4px">
                 <button class="btn editbtn" data-daylog="${di}" style="font-size:9.5px;padding:1px 8px" title="View / edit this day's food log">✎ log</button>
               </span>
               <input type="checkbox" data-shopday="${di}"${shopDays.has(di) ? ' checked' : ''}></div>
             ${lrows}
-            <div class="dfoot">${logged.length ? `${Math.round(k)} · P ${Math.round(p)} <span style="color:var(--muted);font-weight:400">/ ${T.k}</span>` : 'Nothing logged'}</div>
+            <div class="dfoot">${logged.length ? `${logged.length} logged · ${Math.round(k)} · P ${Math.round(p)} <span style="color:var(--muted);font-weight:400">/ ${T.k}</span>` : 'Nothing logged'}</div>
           </div>`;
         }
-        const rows = entries.map(e => {
+        entries.forEach(e2 => { const dsh = dishById(e2.dishId); if (dsh || e2.name) { k += dsh ? dsh.k : (e2.k || 0); p += dsh ? dsh.p : (e2.p || 0); } });
+        const open = openDays.has(di);
+        const rows = open ? entries.map(e => {
           const dsh = dishById(e.dishId);
           const nm = dsh ? dsh.name : e.name;
           if (!nm) return '';
           const ek = dsh ? dsh.k : (e.k || 0), ep = dsh ? dsh.p : (e.p || 0);
-          k += ek; p += ep;
           return `<div class="slotname">${esc(e.slot)}</div>
             <div class="slotfood" style="display:flex;align-items:center;gap:6px"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(nm)}</span><span data-pdel="${di}:${e.id}" style="cursor:pointer;color:var(--muted);margin-left:auto;flex-shrink:0" title="Remove">✕</span></div>
             <div class="slotmac">${ek ? `${Math.round(ek)} · P ${Math.round(ep)}` : '<span style="opacity:0.7">no macros</span>'}</div>`;
-        }).join('');
-        return `<div class="day${entries.length ? '' : ' empty'}${shopSelect && shopDays.has(di) ? ' picked' : ''}">
-          <div class="dhead">${DOW[d.getDay()]} <span style="font-weight:400;color:var(--muted)">${d.getDate()}</span>
+        }).join('') : '';
+        return `<div class="day${entries.length ? '' : ' empty'}${shopSelect && shopDays.has(di) ? ' picked' : ''}" data-dtoggle="${di}" style="cursor:pointer">
+          <div class="dhead"><span style="color:var(--muted);font-size:9px;width:10px;display:inline-block">${open ? '▾' : '▸'}</span>${DOW[d.getDay()]} <span style="font-weight:400;color:var(--muted)">${d.getDate()}</span>
             <span style="display:flex;gap:4px">
               ${di <= iso(new Date()) ? `<button class="btn editbtn" data-daylog="${di}" style="font-size:9.5px;padding:1px 8px" title="View / edit this day's food log">✎ log</button>` : ''}
               <button class="btn editbtn" data-dayplan="${di}" style="font-size:9.5px;padding:1px 8px" title="Open the meal-plan builder for this day">✎ plan</button>
             </span>
             <input type="checkbox" data-shopday="${di}"${shopDays.has(di) ? ' checked' : ''}></div>
           ${rows}
-          <div class="dfoot">${entries.length ? `${Math.round(k)} · P ${Math.round(p)} <span style="color:var(--muted);font-weight:400">/ ${T.k}</span>` : 'Nothing planned'}</div>
+          <div class="dfoot">${entries.length ? `${entries.length} meal${entries.length === 1 ? '' : 's'} · ${Math.round(k)} · P ${Math.round(p)} <span style="color:var(--muted);font-weight:400">/ ${T.k}</span>` : 'Nothing planned'}</div>
         </div>`;
       }).join('') + `</div>
       <div style="font-size:11.5px;color:var(--muted);margin-top:8px">Today's planned meals appear on the dashboard with Log / portion / swap controls.</div>`;
@@ -2428,6 +2430,13 @@
           f: parseFloat(document.getElementById('tg-f').value) || 0 });
         const ok = document.getElementById('tg-ok');
         if (ok) { ok.style.display = 'inline'; setTimeout(() => ok.style.display = 'none', 2500); }
+        return;
+      }
+      const dt = e.target.closest('[data-dtoggle]');
+      if (dt && !e.target.closest('button, input, select, a, [data-pdel]')) {
+        const dti = dt.dataset.dtoggle;
+        openDays.has(dti) ? openDays.delete(dti) : openDays.add(dti);
+        render();
         return;
       }
     });
