@@ -320,7 +320,7 @@
 <body class="booting">
 
 <aside>
-  <div class="logo"><img id="logo-img" style="display:none;width:20px;height:20px;border-radius:6px;vertical-align:-4px;margin-right:6px;object-fit:cover" alt="">Fuel<span>OS</span> <span style="color:var(--muted);font-weight:400;font-size:11px">midnight</span></div>
+  <!-- APP_VER marker --><div class="logo"><img id="logo-img" style="display:none;width:20px;height:20px;border-radius:6px;vertical-align:-4px;margin-right:6px;object-fit:cover" alt="">Fuel<span>OS</span> <span style="color:var(--muted);font-weight:400;font-size:11px">midnight · <span id="app-ver"></span></span></div>
   <button class="nav-item active" data-page="dashboard">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
     Dashboard</button>
@@ -517,7 +517,7 @@
 
   <!-- ============ SETTINGS ============ -->
   <section class="page" id="page-settings">
-    <div class="pagehead"><h1>Settings</h1></div>
+    <div class="pagehead"><h1>Settings</h1><span style="color:var(--muted);font-size:12px">FuelOS <span id="app-ver2"></span></span></div>
     <!-- ===== TEMP: dev data controls (settings-page copy) — delete with the sidebar TEMP block ===== -->
     <div class="card" style="max-width:440px;margin-bottom:16px">
       <h2>Data controls <span class="meta">temporary · while we build</span></h2>
@@ -1147,10 +1147,19 @@
     }
   })();
 
-  // ================= PWA — installable app shell (activates only when hosted) =================
+  // ================= PWA — installable app shell, self-updating =================
+  const APP_VER = 'v0.86';
+  ['app-ver', 'app-ver2'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = APP_VER; });
   try {
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
+      navigator.serviceWorker.register('sw.js').then(reg => { try { reg.update(); } catch (e) {} }).catch(() => {});
+      // when a new version takes control, reload once so the user is instantly on it
+      let swRefreshed = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (swRefreshed) return;
+        swRefreshed = true;
+        try { location.reload(); } catch (e) {}
+      });
       if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
     }
   } catch (e) {}
